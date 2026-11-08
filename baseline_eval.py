@@ -21,8 +21,10 @@ import numpy as np
 # model id -> how to call it (taken from each Hugging Face model card)
 MODELS = {
     "Qwen/Qwen3-ASR-1.7B-hf": {"cast_to_model_dtype": True, "min_vram_gb": 0},
+    "CohereLabs/cohere-transcribe-03-2026f": {"cast_to_model_dtype": True, "min_vram_gb": 0},
+    "bosonai/higgs-audio-v3-stt": {"cast_to_model_dtype": True, "min_vram_gb": 0},
     # 34B params in BF16 -> ~68 GB of weights; the card's deployment baseline is one H100 80 GB
-    "nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B": {"cast_to_model_dtype": False, "min_vram_gb": 75},
+    # "nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B": {"cast_to_model_dtype": False, "min_vram_gb": 75},
 }
 
 

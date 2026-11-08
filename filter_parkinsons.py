@@ -62,8 +62,10 @@ def make_speaker_split(speaker_ids, seed, split_file):
     ids = sorted(speaker_ids)
     random.Random(seed).shuffle(ids)
     n = len(ids)
-    n_dev = max(1, round(0.15 * n)) if n >= 3 else 0
-    n_test = max(1, round(0.15 * n)) if n >= 3 else 0
+    # "dev" folder on the SAP downsampled dataset should be our "test" dataset. Run baselines and tuned models on this dataset
+    # n_dev = max(1, round(0.15 * n)) if n >= 3 else 0
+    n_dev = 0
+    n_test = max(1, round(1 * n)) if n >= 3 else 0
     split = {}
     for i, spk in enumerate(ids):
         split[spk] = "Dev" if i < n_dev else "Test" if i < n_dev + n_test else "Train"

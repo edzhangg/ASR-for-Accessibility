@@ -5,7 +5,7 @@ zero-shot ASR baseline on them. The SAP folder is only ever read.
 
 ## Setup (NVIDIA GPU machine)
 ```bash
-python -m venv .venv && source .venv/bin/activate      # Python 3.10+
+py -m venv .venv; .\.venv\Scripts\Activate.ps1      # Python 3.10+
 pip install torch --index-url https://download.pytorch.org/whl/cu124   # or the CUDA build for your driver
 pip install -r requirements.txt
 ```
