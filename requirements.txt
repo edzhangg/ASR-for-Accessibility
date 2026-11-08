@@ -1,0 +1,9 @@
+# Python 3.10+ recommended. Install a CUDA build of torch first (see README), then:
+torch
+transformers>=5.13.0   # Qwen3-ASR-*-hf is supported natively from v5.13.0 (per its model card)
+accelerate             # device_map="auto"
+numpy
+scipy
+soundfile
+jiwer
+whisper-normalizer
