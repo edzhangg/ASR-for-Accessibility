@@ -1,0 +1,216 @@
+﻿dimension,level,rating_objects
+Pitch level,1,6551
+Inappropriate silences,1,6271
+Short rushes of speech,1,6160
+Breathy voice (continuous) ,1,6034
+Variable rate,1,5785
+Intelligbility ,1,5305
+Imprecise consonants,1,4983
+Reduced stress,1,3269
+Monoloudness,3,2611
+Monopitch,3,2566
+Naturalness,3,2343
+Harsh voice,1,2057
+Harsh voice,3,1922
+Monopitch,2,1788
+Monoloudness,2,1780
+Reduced stress,2,1737
+Harsh voice,2,1673
+Naturalness,4,1580
+Reduced stress,3,1448
+Naturalness,2,1439
+Monopitch,4,1219
+Monoloudness,4,1128
+Imprecise consonants,2,1113
+Monoloudness,1,1089
+Monopitch,1,975
+Intelligbility ,2,896
+Harsh voice,4,842
+Naturalness,5,716
+Variable rate,2,535
+Imprecise consonants,3,531
+Variable rate,3,456
+Breathy voice (continuous) ,2,439
+Intelligbility ,3,397
+Other ,,320
+Short rushes of speech,2,320
+Naturalness,1,304
+Harsh voice,5,300
+Reduced stress,4,292
+Naturalness,6,289
+Monopitch,5,281
+Inappropriate silences,2,276
+Short rushes of speech,3,273
+Pitch level,2,239
+Monoloudness,5,234
+Inappropriate silences,3,220
+Naturalness,7,219
+Rate,2,208
+Breathy voice (continuous) ,3,194
+Imprecise consonants,4,187
+Intelligbility ,4,174
+Rate,3,140
+Breathy voice (continuous) ,4,114
+Voice tremor,3,105
+Strained-strangled voice,3,99
+Distorted vowels,3,98
+Short rushes of speech,4,97
+Distorted vowels,2,96
+Hypernasality,2,94
+Prolonged intervals,2,93
+Excess and equal stress,2,89
+Prolonged intervals,3,85
+Repeated phonemes,2,85
+Reduced stress,5,84
+Variable rate,4,81
+Harsh voice,6,80
+Inappropriate silences,4,80
+Repeated phonemes,3,73
+Strained-strangled voice,2,71
+Rate,4,64
+Voice tremor,2,61
+Monoloudness,6,57
+Breathy voice (continuous) ,5,56
+Loudness level (overall) ,2,55
+Strained-strangled voice,4,54
+Hyponasality,2,53
+Repeated phonemes,4,52
+Monopitch,6,51
+Intelligbility ,5,50
+Imprecise consonants,5,48
+Prolonged phonemes,3,46
+Pitch level,3,45
+Prolonged phonemes,2,45
+Loudness level (overall) ,3,43
+Imprecise consonants,6,39
+Loudness decay,2,38
+Reduced stress,6,38
+Hypernasality,3,37
+Pitch level,4,35
+Excess and equal stress,3,33
+Other ,3,32
+Intelligbility ,6,29
+Voice tremor,4,26
+Breathy voice (transient),3,24
+Excess and equal stress,4,23
+Hypernasality,4,23
+Short phrases,2,23
+Voice stoppages,3,23
+Distorted vowels,4,22
+Hoarse (wet) voice,2,22
+Strained-strangled voice,5,21
+Breathy voice (continuous) ,6,20
+Impaired pitch control ,2,20
+Slow rate,3,20
+Harsh voice ,2,19
+Breathy voice (transient),2,18
+Distorted vowels,5,18
+Irregular articulatory breakdowns,1,18
+Pitch breaks,3,18
+Breathy voice (transient),4,17
+Intelligbility ,7,17
+Intelligibility,2,16
+Loudness decay,3,16
+Other ,5,16
+Short rushes of speech,5,16
+Impaired pitch control ,3,15
+Prolonged intervals,1,14
+Hyponasality,3,13
+Prolonged intervals,4,13
+Variable rate,5,13
+Breathy voice (continuous) ,7,12
+Naturalness (overall) ,7,12
+Short phrases,3,12
+Hoarse (wet) voice,3,11
+Inappropriate silences,5,11
+Other ,4,11
+Repeated phonemes,5,11
+Voice stoppages,4,11
+Other ,6,10
+Prolonged phonemes,4,9
+Harsh voice,7,8
+Intelligbility (overall),6,8
+Rate,5,8
+Voice tremor,5,8
+Hoarse (wet) voice,4,7
+Irregular articulatory breakdowns,3,7
+Slow rate,4,7
+Audible inspiration,3,6
+Impaired pitch control ,4,6
+Imprecise consonants,,6
+Imprecise consonants,7,6
+Intelligibility,1,6
+Intelligibility,3,6
+Audible inspiration,2,5
+Breathy voice (continuous) ,,5
+Harsh voice,,5
+Harsh voice ,3,5
+Hoarse (wet) voice,6,5
+Hypernasality,5,5
+Inappropriate silences,6,5
+Inappropriate silences,NA,5
+Increase of rate in segments,3,5
+Intelligbility ,,5
+Irregular articulatory breakdowns,4,5
+Monoloudness,,5
+Prolonged phonemes,5,5
+Increase of rate overall,3,4
+Loudness decay,4,4
+Monopitch,,4
+Pitch breaks,2,4
+Repeated phonemes,6,4
+Short phrases,4,4
+Short rushes of speech,6,4
+Strained-strangled voice,6,4
+Distorted vowels,6,3
+Forced inspiration-expiration,3,3
+Grunt at end of expiration,4,3
+Inappropriate silences,,3
+Inappropriate silences,7,3
+Monopitch,7,3
+Nasal emission,2,3
+Naturalness,,3
+Other ,2,3
+Prolonged intervals,,3
+Prolonged intervals,5,3
+Rate,6,3
+Reduced stress,7,3
+Short rushes of speech,,3
+Variable rate,6,3
+Breathy voice (transient),5,2
+Distorted vowels,7,2
+Hoarse (wet) voice,5,2
+Intelligbility (overall),7,2
+Nasal emission,4,2
+Other ,7,2
+Pitch breaks,4,2
+Pitch level,5,2
+Pitch level,NA,2
+Repeated phonemes,7,2
+Voice tremor,,2
+Breathy voice (transient),6,1
+Excess loudness variation,2,1
+Impaired emphasis ,5,1
+Impaired loudness control ,2,1
+Impaired loudness control ,3,1
+Increase of rate in segments,2,1
+Increase of rate in segments,4,1
+Increase of rate overall,2,1
+Increase of rate overall,4,1
+Intelligbility (overall),2,1
+Intelligbility (overall),4,1
+Irregular articulatory breakdowns,2,1
+Irregular articulatory breakdowns,5,1
+Monoloudness,7,1
+Nasal emission,3,1
+Prolonged phonemes,1,1
+Rate,,1
+Reduced stress,,1
+Reduced stress,NA,1
+Short phrases,5,1
+Short rushes of speech,NA,1
+Slow rate,2,1
+Strained-strangled voice,7,1
+Variable rate,,1
+Voice stoppages,2,1
+Voice tremor,6,1

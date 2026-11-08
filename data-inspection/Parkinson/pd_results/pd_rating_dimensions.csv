@@ -1,0 +1,70 @@
+﻿dimension_category,dimension,rating_objects
+Parkinson Disease ,Breathy voice (continuous) ,6874
+Parkinson Disease ,Harsh voice,6874
+Parkinson Disease ,Imprecise consonants,6874
+Parkinson Disease ,Monoloudness,6874
+Parkinson Disease ,Pitch level,6874
+Parkinson Disease ,Short rushes of speech,6874
+Parkinson Disease ,Variable rate,6874
+Parkinson Disease ,Inappropriate silences,6873
+Parkinson Disease ,Intelligbility ,6873
+Parkinson Disease ,Reduced stress,6870
+Parkinson Disease ,Naturalness,6865
+Parkinson Disease ,Monopitch,6857
+Master,Rate,424
+Parkinson Disease ,Other ,394
+Master,Strained-strangled voice,250
+Master,Repeated phonemes,227
+Master,Distorted vowels,213
+Master,Voice tremor,203
+Master,Prolonged intervals,193
+Master,Hypernasality,159
+Master,Excess and equal stress,118
+Master,Loudness level (overall) ,98
+Master,Prolonged phonemes,83
+Master,Hyponasality,66
+Master,Breathy voice (transient),62
+Master,Loudness decay,58
+Master,Hoarse (wet) voice,47
+Master,Impaired pitch control ,41
+Master,Short phrases,39
+Master,Voice stoppages,35
+Ataxic Dysarthria ,Intelligibility,27
+Ataxic Dysarthria ,Naturalness,27
+Ataxic Dysarthria ,Slow rate,27
+Ataxic Dysarthria ,Distorted vowels,26
+Ataxic Dysarthria ,Excess and equal stress,26
+Ataxic Dysarthria ,Monoloudness,26
+Ataxic Dysarthria ,Imprecise consonants,25
+Ataxic Dysarthria ,Monopitch,25
+Ataxic Dysarthria ,Harsh voice ,24
+Master,Pitch breaks,24
+Ataxic Dysarthria ,Prolonged phonemes,23
+Ataxic Dysarthria ,Irregular articulatory breakdowns,22
+Ataxic Dysarthria ,Prolonged intervals,18
+Master,Harsh voice,13
+Master,Imprecise consonants,13
+Master,Intelligbility (overall),12
+Master,Naturalness (overall) ,12
+Master,Audible inspiration,11
+Master,Irregular articulatory breakdowns,10
+Master,Increase of rate in segments,7
+Master,Increase of rate overall,6
+Master,Nasal emission,6
+Master,Monoloudness,4
+Master,Monopitch,4
+Master,Forced inspiration-expiration,3
+Master,Grunt at end of expiration,3
+Master,Reduced stress,3
+Master,Impaired loudness control ,2
+ALS,Excess and equal stress,1
+ALS,Imprecise consonants,1
+ALS,Intelligibility,1
+ALS,Monoloudness,1
+ALS,Monopitch,1
+ALS,Naturalness,1
+ALS,Slow rate,1
+Hyperkinetic with Dystonia ,Short phrases,1
+Master,Excess loudness variation,1
+Master,Impaired emphasis ,1
+Master,Inappropriate silences,1

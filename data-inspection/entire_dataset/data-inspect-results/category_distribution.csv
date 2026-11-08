@@ -1,0 +1,9 @@
+﻿split,category,recording_references
+Dev,Digital Assistant Commands,35749
+Dev,Non-spontaneous Speech Prompts,1136
+Dev,Novel Sentences,5206
+Dev,Spontaneous Speech Prompts,6158
+Train,Digital Assistant Commands,220430
+Train,Non-spontaneous Speech Prompts,7869
+Train,Novel Sentences,32716
+Train,Spontaneous Speech Prompts,36770
