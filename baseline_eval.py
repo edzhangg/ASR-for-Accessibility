@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Zero-shot ASR baseline on the Parkinson's manifest (made by filter_parkinsons.py).
 
-  python baseline_eval.py --manifest /data/SAP_PD/manifest_pd.jsonl --split Dev --max-utts 20 --out runs/smoke
+  python baseline_eval.py --manifest /data/SAP_PD/manifest_pd.jsonl --split Test --max-utts 20 --out runs/smoke
 
 Writes into --out: predictions.jsonl (incremental, rerun resumes), errors.jsonl, summary.json.
 Scoring is done from predictions.jsonl, so changing the text cleaning never needs a re-run of the model.
@@ -164,7 +164,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--manifest", required=True, help="manifest_pd.jsonl from filter_parkinsons.py")
     ap.add_argument("--model", default="Qwen/Qwen3-ASR-1.7B-hf", choices=list(MODELS))
-    ap.add_argument("--split", default="Dev")
+    ap.add_argument("--split", default="Test",
+                    help="Train/Dev/Test, or 'all'. Report headline numbers on Test only so every model "
+                         "(zero-shot or fine-tuned) is scored on the same held-out speakers.")
     ap.add_argument("--max-utts", type=int, default=None, help="random subsample (fixed --seed)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--batch-size", type=int, default=8)
@@ -179,7 +181,8 @@ def main():
     t0 = time.time()
 
     # pick utterances (sorted first so the sample only depends on the seed)
-    rows = [r for r in read_jsonl(Path(args.manifest)) if r["split"].lower() == args.split.lower()]
+    rows = [r for r in read_jsonl(Path(args.manifest))
+            if args.split.lower() == "all" or r["split"].lower() == args.split.lower()]
     rows.sort(key=lambda r: r["audio_path"])
     if args.max_utts and args.max_utts < len(rows):
         rows = random.Random(args.seed).sample(rows, args.max_utts)

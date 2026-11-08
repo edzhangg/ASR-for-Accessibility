@@ -26,11 +26,16 @@ Hard-linked files share data with the originals: never edit them in place.
 ## 2. Baseline evaluation
 ```bash
 # smoke test
-python baseline_eval.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --split Dev --max-utts 20 --out runs/qwen_smoke
+python baseline_eval.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --split Test --max-utts 20 --out runs/qwen_smoke
 
-# full Dev split
-python baseline_eval.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --split Dev --batch-size 8 --out runs/qwen_dev
+# headline result: full Test split (default)
+python baseline_eval.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --batch-size 8 --out runs/qwen_test
+
+# optional, descriptive only (not comparable to fine-tuned models): all speakers
+python baseline_eval.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --split all --out runs/qwen_all
 ```
+**Report headline numbers on `--split Test` only.** Zero-shot and fine-tuned models must be scored on the same
+held-out speakers; `--split all` includes the speakers a fine-tuned model trains on.
 Re-running the same command resumes from `predictions.jsonl`. Outputs: `predictions.jsonl`, `errors.jsonl`
 (skipped clips), `summary.json` (WER/CER overall, per category, per speaker, plus GPU / model / transformers version / runtime).
 
