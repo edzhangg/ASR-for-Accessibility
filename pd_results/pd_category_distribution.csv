@@ -1,8 +1,0 @@
-﻿split,category,recordings
-Dev,Digital Assistant Commands,9691
-Dev,Novel Sentences,3247
-Dev,Spontaneous Speech Prompts,1606
-Train,Digital Assistant Commands,68207
-Train,Non-spontaneous Speech Prompts,89
-Train,Novel Sentences,22641
-Train,Spontaneous Speech Prompts,11240
