@@ -23,25 +23,33 @@ Writes to `--out`: the copied speaker folders, `manifest_pd.jsonl`, `speakers_pd
 Train/Dev/Test folders, `split_pd.json` (speaker-level ~70/15/15 split, `--seed 0`, no speaker in two splits).
 Hard-linked files share data with the originals: never edit them in place.
 
-## 2. Baseline evaluation
+## 2. Baseline evaluation (`run_asr_baselines.py`)
 ```bash
-# smoke test
-python baseline_eval.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --split Test --max-utts 20 --out runs/qwen_smoke
+# smoke test: 20 category-balanced Test utterances, one model
+python run_asr_baselines.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --split Test --max-utts 20 --models qwen --out runs/smoke
 
-# headline result: full Test split (default)
-python baseline_eval.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --batch-size 8 --out runs/qwen_test
+# headline result: the full Test split (the default) for several models
+python run_asr_baselines.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --models qwen whisper cohere higgs --out runs/baselines_test
 
 # optional, descriptive only (not comparable to fine-tuned models): all speakers
-python baseline_eval.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --split all --out runs/qwen_all
+python run_asr_baselines.py --manifest /path/to/SAP_PD/manifest_pd.jsonl --split all --models qwen --out runs/qwen_all
 ```
 **Report headline numbers on `--split Test` only.** Zero-shot and fine-tuned models must be scored on the same
-held-out speakers; `--split all` includes the speakers a fine-tuned model trains on.
-Re-running the same command resumes from `predictions.jsonl`. Outputs: `predictions.jsonl`, `errors.jsonl`
-(skipped clips), `summary.json` (WER/CER overall, per category, per speaker, plus GPU / model / transformers version / runtime).
+held-out speakers; `--split all` includes the speakers a fine-tuned model trains on. Every model uses the same
+`--max-duration` (120 s), so models are scored on the same clips; check `n_unpredicted` before comparing.
 
-Models: `Qwen/Qwen3-ASR-1.7B-hf` (default, a few GB of VRAM) and
-`nvidia/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B` (34B params, needs an ~80 GB GPU; the script refuses on smaller
-GPUs unless `--force`). Select with `--model`.
+Each model gets `--out/<model>/` with `predictions.jsonl` (rerun resumes), `errors.jsonl`, `summary.json`
+(clean + verbatim WER/CER overall, per category, per speaker with median/best/worst, plus GPU, torch/transformers
+versions and runtime), `scored_predictions.jsonl` and `category_scores.csv`. `--out/comparison.csv` lines the models up.
+It exits if there is no CUDA GPU (override with `--allow-cpu`).
+
+Models (`--models`): `qwen` = `Qwen/Qwen3-ASR-1.7B-hf` (transformers >= 5.13), `whisper` = `openai/whisper-small`,
+`cohere` = `CohereLabs/cohere-transcribe-03-2026` (gated: accept its terms on Hugging Face and `huggingface-cli login`;
+transformers >= 5.4), `higgs` = `bosonai/higgs-audio-v3-stt` (needs the `boson_multimodal` package and
+`trust_remote_code`). A model that fails to load is logged and skipped; the others still run.
+
+`baseline_eval.py` is the earlier Qwen/Nemotron-only script, kept for reference. Nemotron-3.5-Transcribe
+(34B parameters, ~80 GB GPU) does not fit on a 12 GB card.
 
 ## Scoring conventions
 Both references are normalized with Whisper's `EnglishTextNormalizer`, as are the hypotheses.

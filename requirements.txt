@@ -7,3 +7,5 @@ scipy
 soundfile
 jiwer
 whisper-normalizer
+# Optional, only for `--models higgs` (see the bosonai/higgs-audio-v3-stt model card for the install source):
+# boson_multimodal
