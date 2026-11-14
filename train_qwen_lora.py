@@ -123,6 +123,31 @@ def patch_outer_forward(model):
     cls._pd_lora_forward_patched = True
 
 
+def bridge_input_embeddings(model):
+    """Expose thinker embeddings through Qwen's outer multimodal wrapper.
+
+    PEFT's k-bit preparation calls ``model.enable_input_require_grads()``,
+    which in turn calls ``get_input_embeddings()``. The Qwen3-ASR outer model
+    inherits a method that raises NotImplementedError even though the inner
+    thinker implements the required embedding access.
+    """
+    try:
+        embeddings = model.get_input_embeddings()
+    except (AttributeError, NotImplementedError):
+        thinker = getattr(model, "thinker", None)
+        if thinker is None or not hasattr(thinker, "get_input_embeddings"):
+            raise RuntimeError(
+                "Qwen3-ASR model exposes no usable input embeddings; incompatible qwen-asr version"
+            )
+        model.get_input_embeddings = thinker.get_input_embeddings
+        if hasattr(thinker, "set_input_embeddings"):
+            model.set_input_embeddings = thinker.set_input_embeddings
+        embeddings = model.get_input_embeddings()
+    if embeddings is None:
+        raise RuntimeError("Qwen3-ASR get_input_embeddings() returned None")
+    return embeddings
+
+
 def build_prefix_messages(prompt, audio_array):
     return [
         {"role": "system", "content": prompt or ""},
@@ -238,6 +263,7 @@ def main(argv=None):
     model = wrapper.model
     processor = wrapper.processor
     patch_outer_forward(model)
+    bridge_input_embeddings(model)
     if args.load_in_4bit:
         model = prepare_model_for_kbit_training(
             model, use_gradient_checkpointing=bool(args.gradient_checkpointing)

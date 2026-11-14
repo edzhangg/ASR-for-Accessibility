@@ -7,6 +7,23 @@ import train_qwen_lora as train_lora
 
 
 class TrainQwenLoraHelperTests(unittest.TestCase):
+    def test_bridges_outer_embedding_method_to_thinker(self):
+        expected = object()
+
+        class Thinker:
+            def get_input_embeddings(self):
+                return expected
+
+        class Outer:
+            thinker = Thinker()
+
+            def get_input_embeddings(self):
+                raise NotImplementedError
+
+        model = Outer()
+        self.assertIs(expected, train_lora.bridge_input_embeddings(model))
+        self.assertIs(expected, model.get_input_embeddings())
+
     def test_validates_official_audio_text_schema(self):
         with tempfile.TemporaryDirectory() as directory:
             manifest = Path(directory) / "train.jsonl"

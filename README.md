@@ -133,6 +133,29 @@ available: True
 GPU: NVIDIA GeForce RTX 4070
 ```
 
+#### PEFT `get_input_embeddings` compatibility error
+
+An earlier version of `train_qwen_lora.py` could finish downloading the model
+and then fail during `prepare_model_for_kbit_training` with:
+
+```text
+NotImplementedError: get_input_embeddings not auto-handled for
+Qwen3ASRForConditionalGeneration
+```
+
+This is caused by the Qwen3-ASR outer multimodal wrapper: PEFT asks it for the
+token embeddings, but Qwen exposes those embeddings through the inner
+`thinker`. The trainer now bridges the outer method to the thinker before PEFT
+preparation. Pull commit `HEAD` (or later) and rerun the same smoke command; no
+package reinstall or model redownload is required. The downloaded model should
+already be present in the Hugging Face cache.
+
+Confirm that the updated helper is present if needed:
+
+```powershell
+Select-String -Path .\train_qwen_lora.py -Pattern "bridge_input_embeddings"
+```
+
 First run a two-step smoke test. It verifies that the model, quantization,
 collator, backward pass, and adapter checkpoint fit before committing to the
 pilot:
