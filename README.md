@@ -211,3 +211,13 @@ py .\run_asr_baselines.py `
   --max-duration 120 `
   --out .\runs\qwen_pd_lora_200_val
 ```
+
+# monitor without seeing processes
+
+```powershell
+while ($true) {
+    Clear-Host
+    nvidia-smi --query-gpu=timestamp,name,utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv
+    Start-Sleep -Seconds 1
+}
+```
