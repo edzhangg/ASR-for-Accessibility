@@ -7,3 +7,9 @@ scipy
 soundfile
 jiwer
 whisper-normalizer
+# Fine-tuning and evaluation of official Qwen3-ASR fine-tuned checkpoints:
+# qwen-asr
+# datasets
+# peft
+# bitsandbytes
+# librosa

@@ -49,3 +49,104 @@ Both references are normalized with Whisper's `EnglishTextNormalizer`, as are th
 - **clean**: `(parenthesized disfluencies)` removed.
 - **verbatim**: the words inside `(...)` are kept, e.g. `(s-) show` -> `s- show`.
 WER/CER are corpus-level (total errors / total reference words). Utterances whose reference becomes empty are skipped.
+
+## Prepare Qwen fine-tuning manifests
+
+Convert the existing speaker-disjoint Train and Validation manifests to the
+official Qwen3-ASR `audio`/`text` format without copying or modifying audio:
+
+```powershell
+py .\prepare_qwen_finetuning.py `
+  --train .\data\pd_prepared\train.jsonl `
+  --val .\data\pd_prepared\val.jsonl `
+  --out .\data\qwen_finetuning `
+  --pilot-size 8000 `
+  --max-duration 30 `
+  --verify-audio
+```
+
+The command validates speaker and audio separation, writes full
+Train/Validation manifests and a deterministic speaker-complete pilot, and
+creates `preparation_report.json`. These outputs contain restricted paths and
+transcripts and are ignored by Git.
+
+The official Qwen trainer uses `Qwen/Qwen3-ASR-1.7B` and requires `qwen-asr`
+and `datasets`. Full-parameter fine-tuning requires substantially more GPU
+memory than inference; verify the training method and memory budget before
+launching it on a 12 GB card.
+
+### Experimental LoRA/QLoRA pilot for a 12 GB GPU
+
+`train_qwen_lora.py` is a separate, project-owned parameter-efficient trainer.
+It follows Qwen's official preprocessing but freezes the base model and trains
+small PEFT LoRA adapters. Its defaults use 4-bit base weights, batch size 1,
+gradient checkpointing, and a memory-efficient optimizer. This path is
+experimental because Qwen does not currently document LoRA in its official ASR
+trainer.
+
+Use a dedicated environment: `qwen-asr` currently requires a different
+Transformers version from the native `Qwen3-ASR-1.7B-hf` baseline environment.
+Python 3.10 or 3.11 is preferable when available.
+
+```powershell
+py -m venv .venv-qwen-lora
+.\.venv-qwen-lora\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install qwen-asr datasets peft bitsandbytes librosa accelerate
+```
+
+First run a two-step smoke test. It verifies that the model, quantization,
+collator, backward pass, and adapter checkpoint fit before committing to the
+pilot:
+
+```powershell
+python .\train_qwen_lora.py `
+  --train-file .\data\qwen_finetuning\train_pilot.jsonl `
+  --output-dir .\checkpoints\qwen_pd_lora_smoke `
+  --max-steps 2 `
+  --save-steps 1 `
+  --save-total-limit 2
+```
+
+If peak VRAM remains safe, run the one-epoch pilot:
+
+```powershell
+python .\train_qwen_lora.py `
+  --train-file .\data\qwen_finetuning\train_pilot.jsonl `
+  --eval-file .\data\qwen_finetuning\val.jsonl `
+  --output-dir .\checkpoints\qwen_pd_lora_pilot `
+  --epochs 1 `
+  --batch-size 1 `
+  --grad-acc 8 `
+  --save-steps 200
+```
+
+In-training evaluation is disabled by default to save time and memory. Measure
+WER for selected adapter checkpoints with `run_asr_baselines.py` instead.
+
+Evaluate a checkpoint made by the official trainer with its `qwen-asr` loader:
+
+```powershell
+py .\run_asr_baselines.py `
+  --manifest .\data\pd_prepared\val.jsonl `
+  --models qwen `
+  --qwen-model .\checkpoints\qwen_pd_pilot\checkpoint-200 `
+  --qwen-backend qwen-asr `
+  --max-utts 0 `
+  --max-duration 120 `
+  --out .\runs\qwen_pd_checkpoint_200_val
+```
+
+Evaluate a LoRA adapter checkpoint against the same Validation manifest:
+
+```powershell
+py .\run_asr_baselines.py `
+  --manifest .\data\pd_prepared\val.jsonl `
+  --models qwen `
+  --qwen-model Qwen/Qwen3-ASR-1.7B `
+  --qwen-adapter .\checkpoints\qwen_pd_lora_pilot\checkpoint-200 `
+  --qwen-backend qwen-asr `
+  --max-utts 0 `
+  --max-duration 120 `
+  --out .\runs\qwen_pd_lora_200_val
+```
