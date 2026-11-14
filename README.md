@@ -95,6 +95,44 @@ python -m pip install --upgrade pip
 python -m pip install qwen-asr datasets peft bitsandbytes librosa accelerate
 ```
 
+#### Verify CUDA PyTorch before training
+
+The packages above may install a CPU-only PyTorch build. A smoke test that
+prints `CUDA GPU is required` did not start training. With the LoRA environment
+activated, first verify which Python and PyTorch are being used:
+
+```powershell
+where.exe python
+python -c "import torch; print('torch:', torch.__version__); print('CUDA build:', torch.version.cuda); print('available:', torch.cuda.is_available())"
+```
+
+If `CUDA build` is `None` or `available` is `False`, replace PyTorch inside
+this environment with the CUDA 13.0 wheel. The RTX 4070 machine's newer NVIDIA
+driver is backward-compatible with this wheel, and CUDA 13.0 is within the
+documented bitsandbytes compatibility range:
+
+```powershell
+python -m pip uninstall -y torch torchvision torchaudio
+python -m pip install torch==2.14.1 torchvision==0.29.1 `
+  --index-url https://download.pytorch.org/whl/cu130
+```
+
+Verify the repair before rerunning training:
+
+```powershell
+python -c "import torch; print('torch:', torch.__version__); print('CUDA:', torch.version.cuda); print('available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NONE')"
+python -c "import bitsandbytes as bnb; print('bitsandbytes:', bnb.__version__)"
+```
+
+Expected CUDA fields are similar to:
+
+```text
+torch: 2.14.1+cu130
+CUDA: 13.0
+available: True
+GPU: NVIDIA GeForce RTX 4070
+```
+
 First run a two-step smoke test. It verifies that the model, quantization,
 collator, backward pass, and adapter checkpoint fit before committing to the
 pilot:
