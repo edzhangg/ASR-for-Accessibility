@@ -87,12 +87,14 @@ class ModelLoadError(RuntimeError):
     pass
 
 
-class QwenRunner:
-    def __init__(self):
+class QwenTransformersRunner:
+    """Transformers-native runner used by the published ``-hf`` checkpoint."""
+
+    def __init__(self, model_id):
         import torch
         from transformers import AutoProcessor, AutoModelForMultimodalLM
         self.torch = torch
-        mid = MODEL_IDS["qwen"]
+        mid = model_id
         self.processor = AutoProcessor.from_pretrained(mid)
         self.model = AutoModelForMultimodalLM.from_pretrained(
             mid, device_map="auto", torch_dtype=torch.float16 if not torch.cuda.is_bf16_supported() else torch.bfloat16,
@@ -106,6 +108,33 @@ class QwenRunner:
         token_ids = output[:, inputs["input_ids"].shape[1]:]
         decoded = p.decode(token_ids, return_format="transcription_only")
         return decoded[0] if isinstance(decoded, (list, tuple)) else str(decoded)
+
+
+class QwenFineTunedRunner:
+    """Official qwen-asr runner used by fine-tuned Qwen3-ASR checkpoints."""
+
+    def __init__(self, model_id, max_new_tokens, adapter_path=None):
+        import torch
+        from qwen_asr import Qwen3ASRModel
+        dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        self.model = Qwen3ASRModel.from_pretrained(
+            model_id,
+            dtype=dtype,
+            device_map="cuda:0",
+            max_inference_batch_size=1,
+            max_new_tokens=max_new_tokens,
+        )
+        if adapter_path:
+            from peft import PeftModel
+            adapted = PeftModel.from_pretrained(self.model.model, adapter_path)
+            self.model.model = adapted.merge_and_unload().eval()
+
+    def __call__(self, audio, max_new_tokens):
+        # qwen-asr accepts a (waveform, sample_rate) pair and handles long inputs.
+        results = self.model.transcribe(audio=(audio, 16000), language="English")
+        if not results:
+            raise RuntimeError("qwen-asr returned no transcription")
+        return str(results[0].text)
 
 
 class CohereRunner:
@@ -227,9 +256,28 @@ class HiggsRunner:
         return re.sub(r"<\|.*?\|>", "", hyp).strip()
 
 
-def make_runner(name):
+def model_id_for(name, args):
+    if name != "qwen":
+        return MODEL_IDS[name]
+    local_path = Path(args.qwen_model)
+    return str(local_path.resolve()) if local_path.exists() else args.qwen_model
+
+
+def model_identity_for(name, args):
+    model_id = model_id_for(name, args)
+    if name == "qwen" and args.qwen_adapter:
+        adapter = Path(args.qwen_adapter)
+        adapter_id = str(adapter.resolve()) if adapter.exists() else args.qwen_adapter
+        return f"{model_id} + LoRA:{adapter_id}"
+    return model_id
+
+
+def make_runner(name, args):
     if name == "qwen":
-        return QwenRunner()
+        model_id = model_id_for(name, args)
+        if args.qwen_backend == "qwen-asr":
+            return QwenFineTunedRunner(model_id, args.max_new_tokens, args.qwen_adapter or None)
+        return QwenTransformersRunner(model_id)
     if name == "cohere":
         return CohereRunner()
     if name == "higgs":
@@ -300,13 +348,16 @@ def run_one(name, rows, args, normalizer):
     err_file = out / "errors.jsonl"
     config_file = out / "run_config.json"
     selected = select_rows(rows, args.max_utts, args.seed)
+    model_id = model_identity_for(name, args)
     signature = {
-        "model_name": name, "model_id": MODEL_IDS[name],
+        "model_name": name, "model_id": model_id,
         "manifest": str(args.manifest.resolve()),
         "seed": args.seed, "max_new_tokens": args.max_new_tokens,
         "max_duration": args.max_duration,
         "normalizer": "whisper_normalizer.english.EnglishTextNormalizer",
     }
+    if name == "qwen":
+        signature["qwen_backend"] = args.qwen_backend
     if config_file.exists():
         previous = json.loads(config_file.read_text(encoding="utf-8"))
         if previous != signature:
@@ -317,7 +368,7 @@ def run_one(name, rows, args, normalizer):
     predictions = {}
     if pred_file.exists():
         for p in read_jsonl(pred_file):
-            if p.get("model_id") != MODEL_IDS[name]:
+            if p.get("model_id") != model_id:
                 raise RuntimeError(f"Model mismatch in {pred_file}")
             predictions[p["audio_path"]] = p
     pending = [r for r in selected if r["audio_path"] not in predictions]
@@ -333,24 +384,24 @@ def run_one(name, rows, args, normalizer):
                 raise ValueError(f"duration {duration:.2f}s > max_duration {args.max_duration}s")
             audio, _ = load_audio(row["audio_path"])
             if runner is None:
-                print(f"[{name}] loading model {MODEL_IDS[name]}...", flush=True)
+                print(f"[{name}] loading model {model_id}...", flush=True)
                 try:
-                    runner = make_runner(name)
+                    runner = make_runner(name, args)
                 except Exception as load_exc:
-                    append_jsonl(err_file, {"model_id": MODEL_IDS[name], "audio_path": row["audio_path"],
+                    append_jsonl(err_file, {"model_id": model_id, "audio_path": row["audio_path"],
                                             "error_type": "model_load_failed", "error": str(load_exc), "time": time.time()})
                     raise ModelLoadError(f"Failed to initialize {name}: {load_exc}") from load_exc
             hypothesis = runner(audio, args.max_new_tokens)
             if not isinstance(hypothesis, str):
                 raise TypeError(f"model returned {type(hypothesis)}")
-            prediction = {"model_id": MODEL_IDS[name], "audio_path": row["audio_path"], "hyp": hypothesis,
+            prediction = {"model_id": model_id, "audio_path": row["audio_path"], "hyp": hypothesis,
                           "speaker_id": row["speaker_id"], "category": row.get("category", "MISSING")}
             append_jsonl(pred_file, prediction)
             predictions[row["audio_path"]] = prediction
         except Exception as exc:
             typ = type(exc).__name__
             failures[typ] += 1
-            append_jsonl(err_file, {"model_id": MODEL_IDS[name], "audio_path": row["audio_path"],
+            append_jsonl(err_file, {"model_id": model_id, "audio_path": row["audio_path"],
                                     "error_type": typ, "error": str(exc), "time": time.time()})
             print(f"[{name}] failed {idx}/{len(pending)}: {typ}: {exc}", file=sys.stderr, flush=True)
             # Model loading failures should not be repeated for every sample.
@@ -362,7 +413,7 @@ def run_one(name, rows, args, normalizer):
 
     results, scored = summarize(selected, predictions, normalizer)
     results.update({
-        "model_name": name, "model_id": MODEL_IDS[name],
+        "model_name": name, "model_id": model_id,
         "selected_manifest": str(args.manifest.resolve()), "max_utts": args.max_utts,
         "seed": args.seed, "max_duration": args.max_duration,
         "failures_this_run": dict(failures),
@@ -387,6 +438,18 @@ def main(argv=None):
     parser.add_argument("--manifest", type=Path, default=Path("data/pd_prepared/val.jsonl"))
     parser.add_argument("--out", type=Path, default=Path("runs/baselines_val"))
     parser.add_argument("--models", nargs="+", choices=MODEL_NAMES, default=["qwen", "cohere", "higgs", "whisper"])
+    parser.add_argument(
+        "--qwen-model", default=MODEL_IDS["qwen"],
+        help="Qwen Hugging Face model ID or local fine-tuned checkpoint directory",
+    )
+    parser.add_argument(
+        "--qwen-backend", choices=("transformers", "qwen-asr"), default="transformers",
+        help="Use 'qwen-asr' for checkpoints produced by Qwen's official fine-tuning script",
+    )
+    parser.add_argument(
+        "--qwen-adapter", default="",
+        help="optional PEFT/LoRA adapter checkpoint; requires --qwen-backend qwen-asr",
+    )
     parser.add_argument("--max-utts", type=int, default=20, help="Smoke test count; 0 means entire manifest")
     parser.add_argument("--max-duration", type=float, default=30.0, help="Longer clips are logged as skipped, not truncated")
     parser.add_argument("--max-new-tokens", type=int, default=256)
@@ -396,6 +459,8 @@ def main(argv=None):
         parser.error(f"Manifest missing: {args.manifest}")
     if args.max_utts < 0 or args.max_duration <= 0 or args.max_new_tokens <= 0:
         parser.error("Invalid max-utts, max-duration, or max-new-tokens")
+    if args.qwen_adapter and args.qwen_backend != "qwen-asr":
+        parser.error("--qwen-adapter requires --qwen-backend qwen-asr")
     from whisper_normalizer.english import EnglishTextNormalizer
     norm = EnglishTextNormalizer()
     rows = list(read_jsonl(args.manifest))
