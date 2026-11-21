@@ -37,7 +37,7 @@ class PrepareQwenFinetuningTests(unittest.TestCase):
 
             pilot = [json.loads(line) for line in (out / "train_pilot.jsonl").read_text().splitlines()]
             self.assertEqual(4, len(pilot))
-            self.assertEqual({"audio", "text"}, set(pilot[0]))
+            self.assertEqual({"audio", "text", "speaker_id"}, set(pilot[0]))
             self.assertTrue(all(row["text"].startswith(prepare.QWEN_PREFIX) for row in pilot))
             report = json.loads((out / "preparation_report.json").read_text())
             self.assertEqual(2, report["pilot"]["speakers"])

@@ -49,11 +49,16 @@ def parse_args(argv=None):
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num-workers", type=int, default=0,
                         help="0 is safest on Windows and avoids duplicate worker memory")
-    parser.add_argument("--lora-rank", type=int, default=8)
-    parser.add_argument("--lora-alpha", type=int, default=16)
-    parser.add_argument("--lora-dropout", type=float, default=0.05)
-    parser.add_argument("--target-modules", default="all-linear",
-                        help="PEFT target modules; 'all-linear' adapts linear audio/text layers")
+    parser.add_argument("--lora-config", choices=("L1", "L2"), required=True,
+                        help="L1 = decoder attention only; L2 = L1 + audio-encoder attention. "
+                             "Rank/alpha/dropout are shared constants in lora_configs.py")
+    parser.add_argument("--audio-layers", default="",
+                        help="L2 only: comma-separated audio-encoder layer indices (default: all)")
+    parser.add_argument("--sampling", choices=("none", "e1", "e2", "e3", "e4"), default="none",
+                        help="none = Trainer's normal shuffled epochs; e1 uniform, e2 speaker-balanced, "
+                             "e3 hard-speaker 50/50, e4 difficulty-weighted (all weighted draws with replacement)")
+    parser.add_argument("--weights-csv", type=Path,
+                        help="per-speaker sampling probabilities (required for --sampling e1-e4)")
     parser.add_argument("--load-in-4bit", type=int, choices=(0, 1), default=1)
     parser.add_argument("--gradient-checkpointing", type=int, choices=(0, 1), default=1)
     parser.add_argument("--optimizer", default="paged_adamw_8bit")
@@ -80,6 +85,37 @@ def validate_jsonl_schema(path):
     if not count:
         raise ValueError(f"{path}: no training rows")
     return count
+
+
+def read_speaker_ids(path):
+    """speaker_id per row, in the same order the dataset is loaded."""
+    with path.open("r", encoding="utf-8") as handle:
+        rows = [json.loads(line) for line in handle if line.strip()]
+    if any(not row.get("speaker_id") for row in rows):
+        raise ValueError(
+            f"{path}: weighted sampling needs a speaker_id on every row; "
+            "regenerate with prepare_qwen_finetuning.py"
+        )
+    return [{"speaker_id": row["speaker_id"]} for row in rows]
+
+
+def build_train_sampler(args):
+    """Return a WeightedRandomSampler for e1-e4, or None for the default sampler.
+
+    One epoch = len(train) weighted draws, so every sampling strategy sees the same
+    number of samples per epoch/step budget. The generator is seeded once and keeps
+    advancing, so epochs get different but reproducible draws.
+    """
+    if args.sampling == "none":
+        return None
+    if args.weights_csv is None:
+        raise SystemExit("--sampling e1-e4 requires --weights-csv")
+    from hard_speaker_sampler import load_speaker_weights, make_sampler
+
+    rows = read_speaker_ids(args.train_file)
+    info = load_speaker_weights(args.weights_csv, strategy=args.sampling)
+    return make_sampler(rows, info, num_samples=len(rows), seed=args.seed,
+                        check_hard_mass=(args.sampling == "e3"))
 
 
 def find_latest_checkpoint(output_dir):
@@ -229,7 +265,7 @@ def main(argv=None):
     try:
         import torch
         from datasets import load_dataset
-        from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+        from peft import prepare_model_for_kbit_training
         from qwen_asr import Qwen3ASRModel
         from transformers import BitsAndBytesConfig, Trainer, TrainingArguments, set_seed
     except ImportError as exc:
@@ -275,18 +311,11 @@ def main(argv=None):
     if hasattr(model.config, "use_cache"):
         model.config.use_cache = False
 
-    target_modules = args.target_modules
-    if "," in target_modules:
-        target_modules = [name.strip() for name in target_modules.split(",") if name.strip()]
-    lora_config = LoraConfig(
-        r=args.lora_rank,
-        lora_alpha=args.lora_alpha,
-        lora_dropout=args.lora_dropout,
-        target_modules=target_modules,
-        bias="none",
-    )
-    model = get_peft_model(model, lora_config)
-    model.print_trainable_parameters()
+    from lora_configs import build_lora
+
+    audio_layers = {int(i) for i in args.audio_layers.split(",") if i.strip()} or None
+    model, lora_info = build_lora(model, args.lora_config, audio_layers=audio_layers)
+    train_sampler = build_train_sampler(args)
 
     files = {"train": str(args.train_file)}
     if args.eval_file:
@@ -328,6 +357,12 @@ def main(argv=None):
     )
 
     class FloatInputTrainer(Trainer):
+        def _get_train_sampler(self, *a, **kw):
+            # e1-e4: weighted draws with replacement; none: Trainer's default shuffle.
+            if train_sampler is not None:
+                return train_sampler
+            return super()._get_train_sampler(*a, **kw)
+
         def _prepare_inputs(self, inputs):
             inputs = super()._prepare_inputs(inputs)
             for key, value in list(inputs.items()):
@@ -366,6 +401,9 @@ def main(argv=None):
             key: str(value) if isinstance(value, Path) else value
             for key, value in vars(args).items()
         },
+        "lora": lora_info,
+        "sampling": args.sampling,
+        "weights_csv": str(args.weights_csv) if args.weights_csv else None,
         "warning": "Adapter checkpoints and logs may reveal private source paths; do not commit output_dir.",
     }
     (args.output_dir / "training_config.json").write_text(
@@ -378,7 +416,16 @@ def main(argv=None):
     print(f"Train rows: {train_rows:,}; eval rows: {eval_rows:,}")
     print(f"GPU: {run_record['gpu']}; 4-bit: {bool(args.load_in_4bit)}")
     print(f"Resume: {resume or 'no'}")
+    torch.cuda.reset_peak_memory_stats()
     trainer.train(resume_from_checkpoint=str(resume) if resume else None)
+    (args.output_dir / "gpu_usage.json").write_text(json.dumps({
+        "gpu": run_record["gpu"],
+        "peak_memory_allocated_gb": round(torch.cuda.max_memory_allocated() / 1e9, 3),
+        "peak_memory_reserved_gb": round(torch.cuda.max_memory_reserved() / 1e9, 3),
+        "total_memory_gb": round(run_record["gpu_memory_bytes"] / 1e9, 3),
+    }, indent=2) + "\n", encoding="utf-8")
+    (args.output_dir / "log_history.json").write_text(
+        json.dumps(trainer.state.log_history, indent=2) + "\n", encoding="utf-8")
     trainer.save_model(str(args.output_dir / "adapter-final"))
     processor.save_pretrained(str(args.output_dir / "adapter-final"))
 

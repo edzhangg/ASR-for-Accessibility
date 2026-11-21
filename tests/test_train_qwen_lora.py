@@ -40,6 +40,22 @@ class TrainQwenLoraHelperTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 train_lora.validate_jsonl_schema(manifest)
 
+    def test_read_speaker_ids_requires_speaker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            good = Path(directory) / "good.jsonl"
+            good.write_text(json.dumps({"audio": "a", "text": "t", "speaker_id": "s1"}) + "\n", encoding="utf-8")
+            self.assertEqual([{"speaker_id": "s1"}], train_lora.read_speaker_ids(good))
+            bad = Path(directory) / "bad.jsonl"
+            bad.write_text(json.dumps({"audio": "a", "text": "t"}) + "\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                train_lora.read_speaker_ids(bad)
+
+    def test_sampler_none_and_missing_weights(self):
+        from types import SimpleNamespace
+        self.assertIsNone(train_lora.build_train_sampler(SimpleNamespace(sampling="none")))
+        with self.assertRaises(SystemExit):
+            train_lora.build_train_sampler(SimpleNamespace(sampling="e3", weights_csv=None))
+
     def test_finds_highest_checkpoint(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)

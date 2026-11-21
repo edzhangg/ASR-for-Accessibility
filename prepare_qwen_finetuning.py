@@ -104,7 +104,8 @@ def make_pilot(rows, size, seed):
 
 
 def public_row(row):
-    return {"audio": row["audio"], "text": row["text"]}
+    # speaker_id is kept (extra column) so weighted samplers can align rows to speakers.
+    return {"audio": row["audio"], "text": row["text"], "speaker_id": row["_speaker_id"]}
 
 
 def write_jsonl(path, rows):

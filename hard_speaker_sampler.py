@@ -41,16 +41,26 @@ def load_manifest(path):
     return rows
 
 
-def load_speaker_weights(path):
-    """Read precomputed E3 probabilities for each speaker."""
+STRATEGY_COLUMNS = {
+    # strategy -> (per-speaker probability column, per-recording probability column)
+    "e1": ("e1_uniform_recording_p_speaker", "e1_per_recording_probability"),
+    "e2": ("e2_speaker_balanced_p_speaker", "e2_per_recording_probability"),
+    "e3": ("e3_hard50_p_speaker", "e3_per_recording_probability"),
+    "e4": ("e4_difficulty_p_speaker", "e4_per_recording_probability"),
+}
+
+
+def load_speaker_weights(path, strategy="e3"):
+    """Read precomputed sampling probabilities for each speaker."""
     speakers = {}
+    speaker_col, recording_col = STRATEGY_COLUMNS[strategy]
 
     required = {
         "speaker_id",
         "hard_top25",
         "n_manifest",
-        "e3_hard50_p_speaker",
-        "e3_per_recording_probability",
+        speaker_col,
+        recording_col,
     }
 
     with Path(path).open(
@@ -73,8 +83,8 @@ def load_speaker_weights(path):
                 )
 
             n = int(row["n_manifest"])
-            p_speaker = float(row["e3_hard50_p_speaker"])
-            p_recording = float(row["e3_per_recording_probability"])
+            p_speaker = float(row[speaker_col])
+            p_recording = float(row[recording_col])
 
             if n <= 0:
                 raise ValueError(f"Invalid recording count for {speaker_id}")
@@ -107,8 +117,12 @@ def load_speaker_weights(path):
     return speakers
 
 
-def build_sampling_weights(train_rows, speaker_info):
-    """Assign an E3 probability to each recording."""
+def build_sampling_weights(train_rows, speaker_info, check_hard_mass=True):
+    """Assign a sampling probability to each recording.
+
+    check_hard_mass enforces the E3 rule (hard speakers hold 50% of the mass);
+    pass False for E1, which has no such constraint.
+    """
 
     # Count recordings per speaker in the actual training manifest
     counts = Counter(row["speaker_id"] for row in train_rows)
@@ -117,19 +131,22 @@ def build_sampling_weights(train_rows, speaker_info):
     if set(counts) != set(speaker_info):
         raise ValueError("Manifest and weights CSV have different speakers")
 
-    # Verify the CSV matches the training manifest
+    # The manifest may be a filtered version of the one the CSV was built from
+    # (e.g. clips over --max-duration dropped), so it can have FEWER recordings
+    # per speaker than the CSV, never more.
     for speaker_id, count in counts.items():
-        expected = speaker_info[speaker_id]["n"]
+        csv_n = speaker_info[speaker_id]["n"]
 
-        if count != expected:
+        if count > csv_n:
             raise ValueError(
-                f"Recording count mismatch for {speaker_id}: "
-                f"manifest={count}, CSV={expected}"
+                f"Recording count exceeds CSV for {speaker_id}: "
+                f"manifest={count}, CSV={csv_n}"
             )
 
-    # Assign each recording its precomputed probability
+    # Keep each speaker's probability mass from the CSV and split it evenly over
+    # the recordings that actually exist, so the probabilities still sum to 1.
     weights = [
-        speaker_info[row["speaker_id"]]["p_recording"]
+        speaker_info[row["speaker_id"]]["p_speaker"] / counts[row["speaker_id"]]
         for row in train_rows
     ]
 
@@ -142,28 +159,34 @@ def build_sampling_weights(train_rows, speaker_info):
         )
 
     # Check that hard speakers receive 50% of probability mass
-    hard_mass = sum(
-        weight
-        for row, weight in zip(train_rows, weights)
-        if speaker_info[row["speaker_id"]]["hard"]
-    )
-
-    if not math.isclose(hard_mass, 0.5, abs_tol=1e-5):
-        raise ValueError(
-            f"Hard-speaker sampling share is {hard_mass:.4f}, "
-            "expected 0.5"
+    if check_hard_mass:
+        hard_mass = sum(
+            weight
+            for row, weight in zip(train_rows, weights)
+            if speaker_info[row["speaker_id"]]["hard"]
         )
+
+        if not math.isclose(hard_mass, 0.5, abs_tol=1e-5):
+            raise ValueError(
+                f"Hard-speaker sampling share is {hard_mass:.4f}, "
+                "expected 0.5"
+            )
 
     return weights
 
 
-def make_sampler(train_rows, speaker_info, num_samples=None, seed=42):
-    """Construct a PyTorch WeightedRandomSampler."""
+def make_sampler(train_rows, speaker_info, num_samples=None, seed=42,
+                 check_hard_mass=True):
+    """Construct a PyTorch WeightedRandomSampler.
+
+    The generator is created once and advances across epochs, so each epoch gets
+    different (but reproducible) draws.
+    """
 
     import torch
     from torch.utils.data import WeightedRandomSampler
 
-    weights = build_sampling_weights(train_rows, speaker_info)
+    weights = build_sampling_weights(train_rows, speaker_info, check_hard_mass)
 
     if num_samples is None:
         num_samples = len(train_rows)
