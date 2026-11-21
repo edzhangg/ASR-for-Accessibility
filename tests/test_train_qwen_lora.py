@@ -56,6 +56,33 @@ class TrainQwenLoraHelperTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             train_lora.build_train_sampler(SimpleNamespace(sampling="e3", weights_csv=None))
 
+    def test_gradient_check_passes_when_all_groups_train(self):
+        stats = [("m.layers.0.q_proj.lora_B.default.weight", True),
+                 ("m.audio_tower.layers.0.q_proj.lora_B.default.weight", True)]
+        summary = train_lora.check_gradient_flow(stats, "L2")
+        self.assertEqual(summary["audio"]["with_gradient"], 1)
+        train_lora.check_gradient_flow(stats[:1], "L1")          # L1 has no audio matrices: fine
+
+    def test_gradient_check_fails_when_audio_adapters_get_no_gradient(self):
+        # The silent failure we guard against: decoder trains, audio adapters never receive gradient.
+        stats = [("m.layers.0.q_proj.lora_B.default.weight", True),
+                 ("m.audio_tower.layers.0.q_proj.lora_B.default.weight", False),
+                 ("m.audio_tower.layers.1.q_proj.lora_B.default.weight", False)]
+        with self.assertRaisesRegex(RuntimeError, "audio: only 0/2"):
+            train_lora.check_gradient_flow(stats, "L2")
+        train_lora.check_gradient_flow(stats[:1], "L1")          # same model is fine as L1
+
+    def test_gradient_check_fails_when_a_required_group_is_missing_or_dead(self):
+        with self.assertRaisesRegex(RuntimeError, "decoder: no LoRA"):
+            train_lora.check_gradient_flow([], "L1")
+        with self.assertRaisesRegex(RuntimeError, "audio: no LoRA"):
+            train_lora.check_gradient_flow([("m.layers.0.q_proj.lora_B.w", True)], "L2")
+        with self.assertRaisesRegex(RuntimeError, "decoder: only 0/1"):
+            train_lora.check_gradient_flow([("m.layers.0.q_proj.lora_B.w", False)], "L1")
+        with self.assertRaisesRegex(RuntimeError, "exist under L1"):
+            train_lora.check_gradient_flow([("m.layers.0.q.lora_B.w", True),
+                                            ("m.audio_tower.layers.0.q.lora_B.w", True)], "L1")
+
     def test_finds_highest_checkpoint(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)

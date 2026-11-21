@@ -2,7 +2,12 @@
 data/pd_prepared/
 data/qwen_finetuning/
 runs/
+runs_*/
 checkpoints/
+
+# Sampling-weight CSVs contain speaker IDs.
+*sampling_weights*.csv
+weights_v*.csv
 
 # Local environments and caches.
 .venv*/

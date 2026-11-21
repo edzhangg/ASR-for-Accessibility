@@ -1,7 +1,24 @@
-"""hard-speaker 50/50 sampling for Qwen fine-tuning.
+"""Weighted sampling of training recordings for Qwen fine-tuning (strategies E1-E4).
 
-Uses precomputed sampling probabilities from training_sampling_weights.csv.
-Does not load audio or require a GPU.
+Reads the per-speaker probability columns of the weights CSV (built by
+make_sampling_weights.py) and turns them into a PyTorch WeightedRandomSampler:
+
+  e1  uniform over recordings      e2  uniform over speakers
+  e3  hard-speaker 50/50           e4  difficulty-weighted
+
+Key rules
+  * A speaker's probability mass comes from the CSV; it is split evenly over that
+    speaker's recordings *in the manifest actually used for training*. The manifest
+    may therefore be smaller than the one the CSV was built from (clips over
+    --max-duration are dropped) but never larger.
+  * The probabilities must sum to 1 and, for e3 only, hard speakers must hold 50%.
+  * Sampling is with replacement; the generator is seeded once and keeps advancing,
+    so different epochs get different, reproducible draws.
+
+Does not load audio or require a GPU (torch is imported only when a sampler is built).
+Run it directly to simulate the sampler and print the observed hard-speaker share:
+
+  python hard_speaker_sampler.py --manifest train.jsonl --weights weights.csv
 """
 
 import argparse

@@ -1,0 +1,18 @@
+# Environment for the fine-tuning experiments (train_qwen_lora.py, run_asr_baselines.py --qwen-backend qwen-asr).
+# Use a DEDICATED virtual environment: qwen-asr pins a different `transformers` than the native "-hf"
+# baseline in requirements.txt.
+#
+# Install a CUDA build of torch FIRST (see README: "Verify CUDA PyTorch before training"), then:
+#   python -m pip install -r requirements-finetune.txt
+qwen-asr          # Qwen3-ASR model + processor wrapper used for training and fine-tuned inference
+peft              # LoRA adapters
+bitsandbytes      # 4-bit (NF4) base-model quantization and the paged 8-bit optimizer
+datasets          # loads the jsonl manifests
+librosa           # audio loading in the training collator
+accelerate
+# shared with requirements.txt (evaluation / scoring):
+numpy
+scipy
+soundfile
+jiwer             # WER/CER; compare_runs.py falls back to a built-in scorer without it
+whisper-normalizer

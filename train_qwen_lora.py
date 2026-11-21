@@ -9,6 +9,29 @@ accumulation, gradient checkpointing, and a paged 8-bit optimizer.
 
 Use a dedicated environment. The qwen-asr package currently pins a different
 Transformers line than the native ``-hf`` baseline used elsewhere in this repo.
+
+Experiment flags (the ONLY things that should differ between compared runs)
+---------------------------------------------------------------------------
+--lora-config {L1,L2}   which weights get LoRA adapters (see lora_configs.py)
+                          L1 = decoder attention only; L2 = L1 + audio-encoder attention.
+                          Rank/alpha/dropout are shared constants, not flags.
+--sampling {none,e1,e2,e3,e4}
+                        how training recordings are drawn. ``none`` uses the Trainer's
+                        normal shuffled epochs. e1..e4 use a WeightedRandomSampler built
+                        from --weights-csv (see make_sampling_weights.py and
+                        hard_speaker_sampler.py); they need a ``speaker_id`` on every
+                        row of --train-file (prepare_qwen_finetuning.py writes it).
+
+Normally launched through run_experiment.py, which fills in every shared setting from
+configs/shared.json so that all runs use identical hyper-parameters.
+
+Files written to --output-dir
+-----------------------------
+training_config.json   arguments, GPU, package versions, LoRA + sampling info
+checkpoint-N/          adapter weights + optimizer state every --save-steps
+adapter-final/         final adapter (LoRA weights only; the base model is not saved)
+gpu_usage.json         peak GPU memory during training
+log_history.json       loss / learning-rate log
 """
 
 import argparse
@@ -64,6 +87,9 @@ def parse_args(argv=None):
     parser.add_argument("--optimizer", default="paged_adamw_8bit")
     parser.add_argument("--resume-from", type=Path)
     parser.add_argument("--resume-latest", action="store_true")
+    parser.add_argument("--skip-grad-check", action="store_true",
+                        help="disable the first-step check that the adapters really receive gradients "
+                             "(only for debugging; the check protects L2 from silently not training audio)")
     return parser.parse_args(argv)
 
 
@@ -116,6 +142,59 @@ def build_train_sampler(args):
     info = load_speaker_weights(args.weights_csv, strategy=args.sampling)
     return make_sampler(rows, info, num_samples=len(rows), seed=args.seed,
                         check_hard_mass=(args.sampling == "e3"))
+
+
+def check_gradient_flow(stats, lora_config, min_fraction=0.5):
+    """Hard check that every adapter group that SHOULD train actually receives gradient.
+
+    ``stats`` is a list of ``(parameter_name, has_nonzero_gradient)`` for the LoRA
+    ``lora_B`` matrices after the first backward pass. We look at lora_B because LoRA
+    initializes B to zero, which makes the gradient of lora_A exactly zero on step 1;
+    B's gradient is non-zero whenever gradient reaches that layer at all.
+
+    Why this exists: with gradient checkpointing, a block whose inputs do not require
+    gradients can silently produce NO gradient for its own weights. In the audio
+    encoder (L2) the inputs come through frozen layers, so the audio adapters could stay
+    at their initial values while the decoder adapters train and the loss still falls.
+    Training would look healthy, but "audio + decoder" would really be "decoder only".
+
+    Raises RuntimeError if a required group (decoder; audio when ``lora_config`` is L2)
+    is empty or has fewer than ``min_fraction`` of its matrices receiving gradient.
+    Returns a JSON-serializable summary.
+    """
+    groups = {"decoder": [], "audio": []}
+    for name, has_grad in stats:
+        groups["audio" if "audio_tower" in name else "decoder"].append(has_grad)
+
+    required = ["decoder"] + (["audio"] if lora_config == "L2" else [])
+    summary, problems = {}, []
+    for group, flags in groups.items():
+        summary[group] = {"lora_B_matrices": len(flags), "with_gradient": sum(flags)}
+    for group in required:
+        flags = groups[group]
+        if not flags:
+            problems.append(f"{group}: no LoRA matrices found")
+        elif sum(flags) / len(flags) < min_fraction:
+            problems.append(f"{group}: only {sum(flags)}/{len(flags)} LoRA matrices received gradient")
+    if lora_config == "L1" and groups["audio"]:
+        problems.append("audio LoRA matrices exist under L1")
+    if problems:
+        raise RuntimeError(
+            "Gradient-flow check FAILED for " + lora_config + ": " + "; ".join(problems) +
+            ". These adapters would silently not train. Likely cause: gradient checkpointing with inputs "
+            "that do not require grad. Try --gradient-checkpointing 0, or fix the checkpointing mode. "
+            "(Escape hatch, not recommended for real runs: --skip-grad-check.)")
+    return summary
+
+
+def lora_b_gradient_stats(model):
+    """(name, has_nonzero_gradient) for every trainable lora_B matrix of a PEFT model."""
+    stats = []
+    for name, param in model.named_parameters():
+        if param.requires_grad and "lora_B" in name:
+            has_grad = param.grad is not None and bool((param.grad != 0).any())
+            stats.append((name, has_grad))
+    return stats
 
 
 def find_latest_checkpoint(output_dir):
@@ -348,6 +427,10 @@ def main(argv=None):
         dataloader_num_workers=args.num_workers,
         dataloader_pin_memory=True,
         gradient_checkpointing=bool(args.gradient_checkpointing),
+        # Non-reentrant checkpointing still produces gradients for a block's own weights when
+        # the block's inputs do not require grad (the audio encoder case). The gradient-flow
+        # check below verifies this on the first step instead of trusting it.
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         bf16=use_bf16,
         fp16=not use_bf16,
         optim=args.optimizer,
@@ -369,6 +452,21 @@ def main(argv=None):
                 if torch.is_tensor(value) and value.is_floating_point():
                     inputs[key] = value.to(dtype=compute_dtype)
             return inputs
+
+        _gradient_checked = False
+
+        def training_step(self, model, inputs, *a, **kw):
+            loss = super().training_step(model, inputs, *a, **kw)
+            # After the FIRST backward pass (gradients exist; the optimizer has not run yet),
+            # verify every adapter group that should train really got gradient. Fail fast
+            # instead of spending hours on a run whose audio adapters never move.
+            if not self._gradient_checked and not args.skip_grad_check:
+                self._gradient_checked = True
+                summary = check_gradient_flow(lora_b_gradient_stats(model), args.lora_config)
+                (args.output_dir / "gradient_check.json").write_text(
+                    json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+                print(f"Gradient-flow check passed: {summary}", flush=True)
+            return loss
 
     trainer = FloatInputTrainer(
         model=model,

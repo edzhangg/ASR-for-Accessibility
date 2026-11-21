@@ -1,0 +1,41 @@
+{
+  "_notes": [
+    "SINGLE SOURCE OF TRUTH for everything that must be identical across the four experiments.",
+    "Only the sampling strategy (--sampling) and LoRA config (--lora) may differ between runs; they are command-line flags of run_experiment.py, NOT set here.",
+    "Training hyper-parameters below are the defaults from train_qwen_lora.py. The team has not yet confirmed a final training budget: review before the real runs.",
+    "Paths are relative to the repo root. Data folders are gitignored (restricted SAP data).",
+    "Override a value for one launch with: --set training.learning_rate=5e-5 (applies to every experiment in that launch; the effective config is saved as config_used.json in each run folder)."
+  ],
+  "data": {
+    "train_file": "data/qwen_finetuning/train.jsonl",
+    "weights_csv": "data/qwen_finetuning/training_sampling_weights_v2.csv",
+    "val_manifest": "data/pd_prepared/val.jsonl",
+    "test_manifest": "data/pd_prepared/test.jsonl"
+  },
+  "model": {
+    "base": "Qwen/Qwen3-ASR-1.7B"
+  },
+  "training": {
+    "seed": 42,
+    "epochs": 1.0,
+    "max_steps": -1,
+    "batch_size": 1,
+    "grad_acc": 8,
+    "learning_rate": 0.0001,
+    "warmup_ratio": 0.03,
+    "log_steps": 10,
+    "save_steps": 200,
+    "save_total_limit": 3,
+    "load_in_4bit": 1,
+    "gradient_checkpointing": 1,
+    "optimizer": "paged_adamw_8bit",
+    "num_workers": 0
+  },
+  "eval": {
+    "backend": "qwen-asr",
+    "max_utts": 0,
+    "max_duration": 30.0,
+    "max_new_tokens": 256,
+    "seed": 42
+  }
+}

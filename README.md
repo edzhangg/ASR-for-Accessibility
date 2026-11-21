@@ -1,7 +1,12 @@
 # ASR for Parkinson's speech (SAP dataset)
 
-Two scripts: extract the Parkinson's speakers from the Speech Accessibility Project (SAP) data, then run a
-zero-shot ASR baseline on them. The SAP folder is only ever read.
+Extract the Parkinson's speakers from the Speech Accessibility Project (SAP) data, run a zero-shot ASR baseline on
+them, and fine-tune Qwen3-ASR with LoRA. The SAP folder is only ever read.
+
+> **Fine-tuning experiments (2x2: hard-speaker / difficulty-weighted sampling x decoder-only / audio+decoder LoRA):**
+> start with **[FINETUNING.md](FINETUNING.md)**. One shared config (`configs/shared.json`), one runner
+> (`python run_experiment.py --sampling e4 --lora L1`), one comparison script (`compare_runs.py`).
+> The rest of this README covers the data extraction, the baseline, and the original LoRA pilot.
 
 ## Setup (NVIDIA GPU machine)
 ```bash
@@ -156,12 +161,18 @@ Confirm that the updated helper is present if needed:
 Select-String -Path .\train_qwen_lora.py -Pattern "bridge_input_embeddings"
 ```
 
+`--lora-config` is required: `L1` adapts the decoder only, `L2` also adapts the audio encoder (see
+[FINETUNING.md](FINETUNING.md)). For the real experiments use `run_experiment.py` instead of calling the trainer
+directly, so all runs share one config. (Note: the evaluation examples below use `--max-duration 120`; the
+experiment pipeline uses 30 s, matching the prepared training manifests. Use one value for all compared runs.)
+
 First run a two-step smoke test. It verifies that the model, quantization,
 collator, backward pass, and adapter checkpoint fit before committing to the
 pilot:
 
 ```powershell
 python .\train_qwen_lora.py `
+  --lora-config L1 `
   --train-file .\data\qwen_finetuning\train_pilot.jsonl `
   --output-dir .\checkpoints\qwen_pd_lora_smoke `
   --max-steps 2 `
@@ -173,6 +184,7 @@ If peak VRAM remains safe, run the one-epoch pilot:
 
 ```powershell
 python .\train_qwen_lora.py `
+  --lora-config L1 `
   --train-file .\data\qwen_finetuning\train_pilot.jsonl `
   --eval-file .\data\qwen_finetuning\val.jsonl `
   --output-dir .\checkpoints\qwen_pd_lora_pilot `
