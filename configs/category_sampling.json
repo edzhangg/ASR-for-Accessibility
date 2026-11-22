@@ -1,0 +1,8 @@
+{
+  "category_proportions": {
+    "Digital Assistant Commands": 0.5,
+    "Novel Sentences": 0.3,
+    "Spontaneous Speech Prompts": 0.2
+  },
+  "hard_group_probability": 0.5
+}

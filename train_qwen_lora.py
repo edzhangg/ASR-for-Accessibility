@@ -21,6 +21,9 @@ Experiment flags (the ONLY things that should differ between compared runs)
                         from --weights-csv (see make_sampling_weights.py and
                         hard_speaker_sampler.py); they need a ``speaker_id`` on every
                         row of --train-file (prepare_qwen_finetuning.py writes it).
+--category-stratified   legacy E3-only category rebalancing within each speaker.
+--category-config PATH  new E3 category-first sampling using JSON target proportions.
+--category-balance      mixing strength in [0, 1], default 0.5.
 
 Normally launched through run_experiment.py, which fills in every shared setting from
 configs/shared.json so that all runs use identical hyper-parameters.
@@ -82,6 +85,19 @@ def parse_args(argv=None):
                              "e3 hard-speaker 50/50, e4 difficulty-weighted (all weighted draws with replacement)")
     parser.add_argument("--weights-csv", type=Path,
                         help="per-speaker sampling probabilities (required for --sampling e1-e4)")
+    parser.add_argument(
+        "--category-stratified",
+        action="store_true",
+        help="Enable category stratification within speakers (E3 only)",
+    )
+    parser.add_argument(
+        "--category-balance",
+        type=float,
+        default=0.5,
+        help="Category balancing strength from 0 to 1 (default: 0.5)",
+    )
+    parser.add_argument("--category-config", type=Path,
+                        help="E3 category-first proportions JSON; mutually exclusive with --category-stratified")
     parser.add_argument("--load-in-4bit", type=int, choices=(0, 1), default=1)
     parser.add_argument("--gradient-checkpointing", type=int, choices=(0, 1), default=1)
     parser.add_argument("--optimizer", default="paged_adamw_8bit")
@@ -124,24 +140,79 @@ def read_speaker_ids(path):
         )
     return [{"speaker_id": row["speaker_id"]} for row in rows]
 
+def read_sampling_rows(path, require_category=False):
+    """Read sampling metadata in exactly the order of the JSONL dataset."""
+    rows = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, 1):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            speaker = row.get("speaker_id")
+            if not isinstance(speaker, str) or not speaker.strip():
+                raise ValueError(f"{path}:{line_number}: missing speaker_id")
+            result = {"speaker_id": speaker}
+            if require_category:
+                category = row.get("category")
+                if not isinstance(category, str) or not category.strip():
+                    raise ValueError(
+                        f"{path}:{line_number}: category-stratified sampling "
+                        "requires a nonempty category; regenerate the manifest "
+                        "with prepare_qwen_finetuning.py"
+                    )
+                result["category"] = category
+            rows.append(result)
+    return rows
+
 
 def build_train_sampler(args):
-    """Return a WeightedRandomSampler for e1-e4, or None for the default sampler.
+    """Return a weighted sampler or None for Trainer's default sampling.
 
-    One epoch = len(train) weighted draws, so every sampling strategy sees the same
-    number of samples per epoch/step budget. The generator is seeded once and keeps
-    advancing, so epochs get different but reproducible draws.
+    Optional category fields default to their original values for compatibility
+    with existing callers and tests that construct a SimpleNamespace.
     """
+    import math
+
+    category_config_path = getattr(args, "category_config", None)
+    stratified = getattr(args, "category_stratified", False)
+    balance = getattr(args, "category_balance", 0.5)
+
+    if category_config_path is not None:
+        if args.sampling != "e3":
+            raise ValueError("--category-config requires --sampling e3")
+        if stratified:
+            raise ValueError("--category-config and --category-stratified are mutually exclusive")
+    if stratified and args.sampling != "e3":
+        raise ValueError("Category stratification currently supports E3 only")
+    if not isinstance(balance, (int, float)) or not math.isfinite(balance) or not 0 <= balance <= 1:
+        raise ValueError("--category-balance must be a finite number between 0 and 1")
+
     if args.sampling == "none":
         return None
-    if args.weights_csv is None:
+    if not args.weights_csv:
         raise SystemExit("--sampling e1-e4 requires --weights-csv")
+
     from hard_speaker_sampler import load_speaker_weights, make_sampler
 
-    rows = read_speaker_ids(args.train_file)
+    rows = read_sampling_rows(args.train_file, require_category=stratified or category_config_path is not None)
     info = load_speaker_weights(args.weights_csv, strategy=args.sampling)
-    return make_sampler(rows, info, num_samples=len(rows), seed=args.seed,
-                        check_hard_mass=(args.sampling == "e3"))
+    if category_config_path is not None:
+        from category_first_sampler import (
+            load_category_config, make_category_first_sampler,
+        )
+        config = load_category_config(category_config_path)
+        return make_category_first_sampler(
+            rows, info, config, num_samples=len(rows), seed=args.seed,
+        )
+    return make_sampler(
+        rows,
+        info,
+        num_samples=len(rows),
+        seed=args.seed,
+        check_hard_mass=(args.sampling == "e3"),
+        stratified=stratified,
+        category_balance=balance,
+    )
 
 
 def check_gradient_flow(stats, lora_config, min_fraction=0.5):
@@ -502,6 +573,10 @@ def main(argv=None):
         "lora": lora_info,
         "sampling": args.sampling,
         "weights_csv": str(args.weights_csv) if args.weights_csv else None,
+        "category_first_config": (
+            __import__("category_first_sampler").load_category_config(args.category_config)
+            if args.category_config else None
+        ),
         "warning": "Adapter checkpoints and logs may reveal private source paths; do not commit output_dir.",
     }
     (args.output_dir / "training_config.json").write_text(
@@ -526,6 +601,7 @@ def main(argv=None):
         json.dumps(trainer.state.log_history, indent=2) + "\n", encoding="utf-8")
     trainer.save_model(str(args.output_dir / "adapter-final"))
     processor.save_pretrained(str(args.output_dir / "adapter-final"))
+
 
 
 if __name__ == "__main__":
