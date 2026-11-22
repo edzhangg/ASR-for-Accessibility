@@ -25,7 +25,7 @@ import argparse
 import csv
 import json
 import math
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 
@@ -191,34 +191,135 @@ def build_sampling_weights(train_rows, speaker_info, check_hard_mass=True):
 
     return weights
 
+def build_stratified_weights(
+    train_rows,
+    speaker_info,
+    balance=0.5,
+    check_hard_mass=True,
+):
+    """Category-stratified sampling while preserving speaker probabilities."""
 
-def make_sampler(train_rows, speaker_info, num_samples=None, seed=42,
-                 check_hard_mass=True):
-    """Construct a PyTorch WeightedRandomSampler.
+    if not 0 <= balance <= 1:
+        raise ValueError("balance must be between 0 and 1")
 
-    The generator is created once and advances across epochs, so each epoch gets
-    different (but reproducible) draws.
-    """
+    if any(not row.get("category") for row in train_rows):
+        raise ValueError("Category missing from training manifest")
+
+    # Validate the existing speaker probabilities and recording counts.
+    build_sampling_weights(
+        train_rows,
+        speaker_info,
+        check_hard_mass=False,
+    )
+
+    speaker_counts = Counter(
+        row["speaker_id"] for row in train_rows
+    )
+
+    group_counts = Counter(
+        (row["speaker_id"], row["category"])
+        for row in train_rows
+    )
+
+    categories_by_speaker = defaultdict(set)
+
+    for row in train_rows:
+        categories_by_speaker[row["speaker_id"]].add(
+            row["category"]
+        )
+
+    weights = []
+
+    for row in train_rows:
+        speaker = row["speaker_id"]
+        category = row["category"]
+
+        n_s = speaker_counts[speaker]
+        n_sc = group_counts[(speaker, category)]
+        k_s = len(categories_by_speaker[speaker])
+
+        p_speaker = speaker_info[speaker]["p_speaker"]
+
+        p_original = n_sc / n_s
+        p_uniform = 1 / k_s
+
+        p_category = (
+            (1 - balance) * p_original
+            + balance * p_uniform
+        )
+
+        weights.append(
+            p_speaker * p_category / n_sc
+        )
+
+    if not math.isclose(sum(weights), 1.0, abs_tol=1e-5):
+        raise ValueError("Stratified probabilities do not sum to 1")
+
+    if check_hard_mass:
+        hard_speakers = {
+            row["speaker_id"]
+            for row in train_rows
+            if speaker_info[row["speaker_id"]]["hard"]
+        }
+        base_hard_mass = sum(
+            speaker_info[speaker]["p_speaker"]
+            for speaker in hard_speakers
+        )
+        hard_mass = sum(
+            weight
+            for row, weight in zip(train_rows, weights)
+            if speaker_info[row["speaker_id"]]["hard"]
+        )
+
+        if not math.isclose(hard_mass, base_hard_mass, abs_tol=1e-5):
+            raise ValueError("Stratified sampling changed hard-speaker probability mass")
+
+    return weights
+
+def make_sampler(
+    train_rows,
+    speaker_info,
+    num_samples=None,
+    seed=42,
+    check_hard_mass=True,
+    stratified=False,
+    category_balance=0.5,
+):
+    """Construct a reproducible WeightedRandomSampler."""
 
     import torch
     from torch.utils.data import WeightedRandomSampler
 
-    weights = build_sampling_weights(train_rows, speaker_info, check_hard_mass)
+    if num_samples is not None and num_samples <= 0:
+        raise ValueError("num_samples must be positive")
+    if not isinstance(seed, int):
+        raise ValueError("seed must be an integer")
+
+    if stratified:
+        weights = build_stratified_weights(
+            train_rows,
+            speaker_info,
+            balance=category_balance,
+            check_hard_mass=check_hard_mass,
+        )
+    else:
+        weights = build_sampling_weights(
+            train_rows,
+            speaker_info,
+            check_hard_mass=check_hard_mass,
+        )
 
     if num_samples is None:
         num_samples = len(train_rows)
 
     generator = torch.Generator().manual_seed(seed)
 
-    sampler = WeightedRandomSampler(
+    return WeightedRandomSampler(
         weights=torch.tensor(weights, dtype=torch.double),
         num_samples=num_samples,
         replacement=True,
         generator=generator,
     )
-
-    return sampler
-
 
 def main():
     parser = argparse.ArgumentParser()

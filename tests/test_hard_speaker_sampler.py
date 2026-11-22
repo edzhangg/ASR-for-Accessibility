@@ -8,6 +8,7 @@ from pathlib import Path
 
 from hard_speaker_sampler import (
     build_sampling_weights,
+    build_stratified_weights,
     load_speaker_weights,
     make_sampler,
 )
@@ -94,6 +95,31 @@ class TestHardSpeakerSampler(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Hard-speaker"):
             build_sampling_weights(rows, info)
         self.assertAlmostEqual(sum(build_sampling_weights(rows, info, check_hard_mass=False)), 1.0)
+
+    def test_stratified_weights_preserve_hard_mass_with_multiple_categories(self):
+        rows = [
+            {"speaker_id": "hard", "category": "A"},
+            {"speaker_id": "hard", "category": "A"},
+            {"speaker_id": "hard", "category": "B"},
+            {"speaker_id": "easy_a", "category": "A"},
+            {"speaker_id": "easy_b", "category": "B"},
+            {"speaker_id": "easy_b", "category": "B"},
+        ]
+        info = {
+            "hard": {"hard": True, "n": 3, "p_speaker": 0.5},
+            "easy_a": {"hard": False, "n": 1, "p_speaker": 0.25},
+            "easy_b": {"hard": False, "n": 2, "p_speaker": 0.25},
+        }
+
+        weights = build_stratified_weights(rows, info)
+
+        self.assertAlmostEqual(sum(weights), 1.0)
+        hard_mass = sum(
+            weight
+            for row, weight in zip(rows, weights)
+            if info[row["speaker_id"]]["hard"]
+        )
+        self.assertAlmostEqual(hard_mass, 0.5)
 
     def test_sampled_share(self):
         sampler = make_sampler(

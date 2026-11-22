@@ -107,3 +107,32 @@ def make_category_first_sampler(train_rows, speaker_info, config, *,
         replacement=True,
         generator=torch.Generator().manual_seed(seed),
     )
+
+
+def simulate_category_first_sampling(train_rows, speaker_info, config, *,
+                                     draws=100_000, seed=42):
+    """Return observed category and hard-group counts from seeded CPU draws."""
+    import random
+
+    if draws <= 0:
+        raise ValueError("draws must be positive")
+    weights = build_category_first_weights(train_rows, speaker_info, config)
+    cumulative = []
+    total = 0.0
+    for weight in weights:
+        total += weight
+        cumulative.append(total)
+
+    rng = random.Random(seed)
+    category_counts = Counter()
+    hard_counts = Counter()
+    for _ in range(draws):
+        threshold = rng.random()
+        index = next(i for i, upper in enumerate(cumulative) if threshold < upper)
+        row = train_rows[index]
+        category = row["category"]
+        category_counts[category] += 1
+        if category in config["category_proportions"]:
+            hard_counts[(category, bool(speaker_info[row["speaker_id"]]["hard"]))] += 1
+
+    return category_counts, hard_counts

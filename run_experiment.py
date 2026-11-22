@@ -134,6 +134,9 @@ def build_train_cmd(config, sampling, lora, runs_dir, resume_latest=False):
     ]
     if sampling != "none":                      # weighted sampling needs the per-speaker probabilities
         cmd += ["--weights-csv", str(abs_path(d["weights_csv"]))]
+    category_config = config.get("data", {}).get("category_sampling_config")
+    if sampling == "e3" and category_config:
+        cmd += ["--category-config", str(abs_path(category_config))]
     if resume_latest:
         cmd.append("--resume-latest")
     return cmd
@@ -285,6 +288,8 @@ def parse_args(argv=None):
     ap.add_argument("--split", choices=("val", "test"), default="val")
     ap.add_argument("--final", action="store_true", help="required for --split test (final evaluation only)")
     ap.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="shared config (default configs/shared.json)")
+    ap.add_argument("--category-config", type=Path,
+                    help="enable category-first E3 sampling with this proportions JSON")
     ap.add_argument("--set", dest="overrides", action="append", default=[], metavar="SECTION.KEY=VALUE",
                     help="override a shared setting for this launch, e.g. training.learning_rate=5e-5")
     ap.add_argument("--runs-dir", type=Path, default=REPO / "runs")
@@ -307,12 +312,16 @@ def parse_args(argv=None):
         ap.error("--split test requires --final (the test set is only for the final evaluation)")
     if args.split == "test" and "train" in args.stages:
         ap.error("do not train and score the test set in one launch; train first, then run --stages eval --split test --final")
+    if args.category_config and (not args.sampling or any(s != "e3" for s in args.sampling)):
+        ap.error("--category-config requires only --sampling e3")
     return args
 
 
 def main(argv=None):
     args = parse_args(argv)
     config = apply_overrides(load_config(args.config), args.overrides)
+    if args.category_config:
+        config.setdefault("data", {})["category_sampling_config"] = str(args.category_config)
     print(f"shared config: {args.config}" + (f"  overrides: {args.overrides}" if args.overrides else ""))
 
     experiments, failures = [], []

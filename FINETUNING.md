@@ -66,7 +66,7 @@ audio-side adaptation beat decoder-only; does combining both add benefit.
 | File | Purpose |
 |---|---|
 | `prepare_pd_dataset.py` | (data) cleans SAP transcripts and writes speaker-disjoint `train/val/test.jsonl` |
-| `prepare_qwen_finetuning.py` | converts those manifests to the trainer format (`audio`, `text`, **`speaker_id`**); drops clips over `--max-duration` |
+| `prepare_qwen_finetuning.py` | converts those manifests to the trainer format (`audio`, `text`, **`speaker_id`**, `category`); drops clips over `--max-duration` |
 | `make_sampling_weights.py` | per-speaker WER → probability columns for E1–E4 (`weights CSV`) |
 | `hard_speaker_sampler.py` | reads the weights CSV and builds the PyTorch `WeightedRandomSampler` |
 | `lora_configs.py` | L1/L2 definitions: picks target modules by name, applies LoRA, checks what is trainable |
@@ -105,7 +105,8 @@ version than the native `-hf` baseline.
 python prepare_qwen_finetuning.py --train data/pd_prepared/train.jsonl --val data/pd_prepared/val.jsonl --out data/qwen_finetuning --pilot-size 8000 --max-duration 30 --verify-audio
 ```
 Re-run this if your manifests were made before `speaker_id` was added to the output
-(the weighted samplers need it). Keep `--max-duration 30`: it must match the evaluator's
+(weighted samplers need it; category-first and legacy category-stratified sampling
+also need `category`). Keep `--max-duration 30`: it must match the evaluator's
 `eval.max_duration` so training and evaluation drop the same long clips.
 
 ### 3.2 Build the sampling weights (once, seconds, CPU only)
@@ -154,6 +155,13 @@ The whole 2×2, then the final table:
 python run_experiment.py --grid --stages zero-shot train eval compare
 ```
 See what would run without running it: add `--dry-run`.
+
+For category-first E3, opt in on a single E3 run by adding
+`--category-config configs/category_sampling.json`. This fixes the category mix
+at 50/30/20 and splits each category's mass equally between hard and non-hard
+speakers. See [the category-first E3 guide](docs/category-first-e3.md) for the
+probability definition, validation commands, and limitations. The default grid
+continues to use original E3 and E4 unless this option is passed.
 
 Useful flags:
 

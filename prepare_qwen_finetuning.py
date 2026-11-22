@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Prepare private Qwen3-ASR fine-tuning manifests from PD split manifests.
 
-The source manifests and audio are read-only. Output rows contain only the two
-fields expected by Qwen's official fine-tuning script: ``audio`` and ``text``.
-Speaker IDs remain in memory only for validation and summary counts.
+The source manifests and audio are read-only. Output rows contain Qwen's
+``audio`` and ``text`` fields plus ``speaker_id`` and ``category`` metadata for
+the weighted samplers. The trainer removes metadata before model inputs.
 """
 
 import argparse
@@ -104,8 +104,12 @@ def make_pilot(rows, size, seed):
 
 
 def public_row(row):
-    # speaker_id is kept (extra column) so weighted samplers can align rows to speakers.
-    return {"audio": row["audio"], "text": row["text"], "speaker_id": row["_speaker_id"]}
+    return {
+        "audio": row["audio"],
+        "text": row["text"],
+        "speaker_id": row["_speaker_id"],
+        "category": row["_category"],
+    }
 
 
 def write_jsonl(path, rows):

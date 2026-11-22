@@ -54,6 +54,17 @@ class TestCommands(unittest.TestCase):
         self.assertIn("--weights-csv", rx.build_train_cmd(CONFIG, "e4", "L1", self.runs))
         self.assertNotIn("--weights-csv", rx.build_train_cmd(CONFIG, "none", "L1", self.runs))
 
+    def test_category_config_is_forwarded_only_for_e3_when_configured(self):
+        config = json.loads(json.dumps(CONFIG))
+        config["data"]["category_sampling_config"] = "configs/category_sampling.json"
+        cmd = rx.build_train_cmd(config, "e3", "L1", self.runs)
+        self.assertEqual(option(cmd, "--category-config"), str(rx.REPO / "configs/category_sampling.json"))
+        self.assertNotIn("--category-config", rx.build_train_cmd(config, "e4", "L1", self.runs))
+
+    def test_cli_category_config_requires_e3(self):
+        with self.assertRaises(SystemExit):
+            rx.parse_args(["--sampling", "e4", "--lora", "L1", "--category-config", "configs/category_sampling.json"])
+
     def test_eval_cmd_identical_for_zero_shot_and_adapter_except_adapter_and_out(self):
         zs = rx.build_eval_cmd(CONFIG, "val", self.runs, rx.ZERO_SHOT_NAME)
         ft = rx.build_eval_cmd(CONFIG, "val", self.runs, "E3_L1", self.runs / "E3_L1" / "adapter-final")
