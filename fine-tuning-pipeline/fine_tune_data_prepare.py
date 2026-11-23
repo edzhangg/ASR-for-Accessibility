@@ -20,9 +20,32 @@ import argparse
 import json
 import random
 from collections import Counter
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 QWEN_PREFIX = "language English<asr_text>"
+
+
+def resolve_audio_path(src: dict, *, audio_root: Path | None) -> str:
+    """Resolve an audio path without changing the original PD split manifest.
+
+    If the dataset was moved, use audio_relpath (recorded during PD preparation)
+    relative to the NEW SAP dataset root. This never copies or edits audio.
+    """
+    if audio_root is None:
+        return src["audio_path"].strip()
+
+    rel = src.get("audio_relpath")
+    if not isinstance(rel, str) or not rel.strip():
+        raise ValueError("--audio-root requires audio_relpath in each source row")
+    relative = PurePosixPath(rel.replace("\\", "/"))
+    if relative.is_absolute() or not relative.parts or any(
+        part in ("", ".", "..") or ":" in part for part in relative.parts
+    ):
+        raise ValueError("Invalid audio_relpath; refusing to read outside the audio root")
+    resolved = audio_root.joinpath(*relative.parts).resolve()
+    if audio_root != resolved and audio_root not in resolved.parents:
+        raise ValueError("Invalid audio_relpath; refusing to read outside the audio root")
+    return str(resolved)
 
 
 def load_prepared_split(
@@ -32,6 +55,7 @@ def load_prepared_split(
     verify_audio: bool = False,
     max_duration: float = 0.0,
     allowed_categories: set[str] | None = None,
+    audio_root: Path | None = None,
 ) -> tuple[list[dict], set[str], set[str], dict]:
     """Read the prepared PD split, preserving the original audio and transcripts.
 
@@ -61,7 +85,7 @@ def load_prepared_split(
         if str(src.get("split", split)).casefold() != split.casefold():
             raise ValueError(f"{path}:{line_no}: expected split={split!r}")
 
-        audio = src["audio_path"].strip()
+        audio = resolve_audio_path(src, audio_root=audio_root)
         speaker = src["speaker_id"].strip()
         category = src["category"].strip()
         text = src["text"].strip()
@@ -152,6 +176,8 @@ def main(argv=None) -> None:
     parser.add_argument("--max-duration", type=float, default=30.0,
                         help="drop recordings longer than this in both splits; 0 disables")
     parser.add_argument("--verify-audio", action="store_true")
+    parser.add_argument("--audio-root", type=Path, default=None,
+                        help="actual SAP dataset root if the original absolute WAV paths have moved; uses audio_relpath")
     parser.add_argument("--pilot-size", type=int, default=8000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--train-categories", nargs="+", default=None,
@@ -170,6 +196,10 @@ def main(argv=None) -> None:
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
         parser.error("Output directory is not empty; use a fresh directory to prevent stale artifacts")
 
+    audio_root = args.audio_root.resolve() if args.audio_root is not None else None
+    if audio_root is not None and not audio_root.is_dir():
+        parser.error("--audio-root does not exist or is not a directory")
+
     categories = None
     if args.train_categories is not None:
         categories = set(args.train_categories)
@@ -180,9 +210,11 @@ def main(argv=None) -> None:
         train, train_speakers, train_audio, train_report = load_prepared_split(
             args.train, "train", verify_audio=args.verify_audio,
             max_duration=args.max_duration, allowed_categories=categories,
+            audio_root=audio_root,
         )
         val, val_speakers, val_audio, val_report = load_prepared_split(
             args.val, "val", verify_audio=args.verify_audio, max_duration=args.max_duration,
+            audio_root=audio_root,
         )
         if train_speakers & val_speakers:
             raise ValueError("Train/Validation source speaker overlap")
@@ -210,6 +242,7 @@ def main(argv=None) -> None:
         "qwen_prefix": QWEN_PREFIX,
         "source": {"train": str(args.train.resolve()), "val": str(args.val.resolve())},
         "max_duration_seconds": args.max_duration,
+        "audio_root_override": str(audio_root) if audio_root is not None else None,
         "audio_exists_checked": bool(args.verify_audio or args.max_duration > 0),
         "train_categories_allowed": sorted(categories) if categories else "ALL",
         "train": train_report,

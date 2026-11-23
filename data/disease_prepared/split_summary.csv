@@ -1,0 +1,4 @@
+﻿split,assigned_speakers,speakers_with_usable_recordings,usable_recordings,dropped_recordings
+train,221,221,91035,384
+val,25,25,10733,25
+test,35,35,14487,57
