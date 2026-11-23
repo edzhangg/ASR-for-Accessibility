@@ -63,6 +63,8 @@ def wait_gpu(stage):
     while stable < 3:
         if (OUT / 'STOP_QUEUE').exists():
             raise RuntimeError('STOP_QUEUE exists; queue stopped between GPU stages.')
+        if STATE.get('start_now', False):
+            return
         reading = gpu_reading()
         available = (reading['memory_used_mib'] <= 2000 and reading['utilization_percent'] <= 10
                      and not reading['existing_training_pid_11200_alive'])
@@ -180,7 +182,7 @@ def report():
     lines += ['', '| Model | Category | Scored | WER % | CER % |', '|---|---|---:|---:|---:|']
     lines += [f"| {x['model']} | {x['category']} | {x['n']} | {x['wer_percent']} | {x['cer_percent']} |" for x in category_rows]
     lines += ['', '## Timing and limitations', '',
-              'All GPU stages run sequentially after the existing training worker exits and GPU usage stays low for three readings. Stage durations include subprocess startup and model loading. GPU waiting is separate.', '',
+              'GPU stages run sequentially. Stage durations include subprocess startup and model loading. GPU availability checks are skipped for launches using --start-now.', '',
               'Initial reservation: approximately 2–3.5 hours for four arms, plus approximately 15–25 minutes for the matching original-model baseline. Unmeasured L2 speed remains a source of uncertainty.', '',
               'Coverage and exceptions: ' + json.dumps([{x['model']: {'unpredicted': x['unpredicted'], 'failures': x['failures_this_run']}} for x in summary_rows]), '',
               'The original-model baseline uses the same qwen-asr backend, model, token limit, normalizer and frozen manifest as the adapters; older HF baseline metrics are not substituted.', '',
@@ -199,7 +201,7 @@ def report():
                 writer.writerows(values)
 
 
-def run_queue():
+def run_queue(start_now=False):
     global STATE
     lock = OUT / 'queue.lock'
     try:
@@ -209,7 +211,7 @@ def run_queue():
     os.write(descriptor, str(os.getpid()).encode())
     os.close(descriptor)
     STATE = json.loads(STATUS.read_text()) if STATUS.exists() else {}
-    status(state='starting', queue_pid=os.getpid(), queue_started_at_utc=now())
+    status(state='starting', start_now=start_now, queue_pid=os.getpid(), queue_started_at_utc=now())
     try:
         check_inputs()
         report()
@@ -273,9 +275,13 @@ def run_queue():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=['queue', 'report', 'dry-run'])
-    action = parser.parse_args().action
+    parser.add_argument('--start-now', action='store_true', help='queue only: skip GPU and old PID availability checks before every GPU stage')
+    args = parser.parse_args()
+    action = args.action
+    if args.start_now and action != 'queue':
+        parser.error('--start-now requires the queue action')
     if action == 'queue':
-        run_queue()
+        run_queue(args.start_now)
     elif action == 'report':
         check_inputs()
         report()
