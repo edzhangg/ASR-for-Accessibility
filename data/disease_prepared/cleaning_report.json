@@ -1,0 +1,88 @@
+{
+  "target_etiology": "Parkinson's Disease",
+  "source_root": "C:\\SAP downsampled database",
+  "original_shards": {
+    "Train": [
+      "SpeechAccessibility_2026-04-08_000",
+      "SpeechAccessibility_2026-04-08_001",
+      "SpeechAccessibility_2026-04-08_002",
+      "SpeechAccessibility_2026-04-08_003"
+    ],
+    "Dev": [
+      "SpeechAccessibility_2026-04-08_000"
+    ]
+  },
+  "rules": {
+    "square_brackets": "remove bracketed text entirely",
+    "parentheses": "remove brackets only; preserve spoken contents",
+    "curly_braces": "exclude any recording with { or }",
+    "empty_cleaned_transcript": "exclude recording",
+    "unbalanced_square_or_parentheses": "exclude for manual inspection"
+  },
+  "seed": 42,
+  "val_speakers_requested": 25,
+  "raw_target_recordings": 116721,
+  "raw_target_recordings_by_source": {
+    "Dev": 14544,
+    "Train": 102177
+  },
+  "total_dropped": 466,
+  "dropped_by_reason": {
+    "curly_braces": 389,
+    "unbalanced_square_or_parentheses": 77
+  },
+  "total_usable_recordings": 116255,
+  "splits": {
+    "train": {
+      "assigned_speakers": 221,
+      "speakers_with_usable_recordings": 221,
+      "usable_recordings": 91035,
+      "category_counts": {
+        "Digital Assistant Commands": 61025,
+        "Non-spontaneous Speech Prompts": 89,
+        "Novel Sentences": 20243,
+        "Spontaneous Speech Prompts": 9678
+      },
+      "dropped_recordings_by_reason": {
+        "curly_braces": 324,
+        "unbalanced_square_or_parentheses": 60
+      }
+    },
+    "val": {
+      "assigned_speakers": 25,
+      "speakers_with_usable_recordings": 25,
+      "usable_recordings": 10733,
+      "category_counts": {
+        "Digital Assistant Commands": 7174,
+        "Novel Sentences": 2393,
+        "Spontaneous Speech Prompts": 1166
+      },
+      "dropped_recordings_by_reason": {
+        "curly_braces": 22,
+        "unbalanced_square_or_parentheses": 3
+      }
+    },
+    "test": {
+      "assigned_speakers": 35,
+      "speakers_with_usable_recordings": 35,
+      "usable_recordings": 14487,
+      "category_counts": {
+        "Digital Assistant Commands": 9689,
+        "Novel Sentences": 3246,
+        "Spontaneous Speech Prompts": 1552
+      },
+      "dropped_recordings_by_reason": {
+        "curly_braces": 43,
+        "unbalanced_square_or_parentheses": 14
+      }
+    }
+  },
+  "speaker_overlap": 0,
+  "source_integrity_issues": {},
+  "notes": [
+    "No WAV files or original metadata were modified or copied.",
+    "Audio paths are absolute Windows paths; audio_relpath enables relocation.",
+    "This is transcript markup cleaning, not WER/CER linguistic normalization.",
+    "Test is original Dev; ensure it was not used to select models/tune hyperparameters."
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "format": "Qwen3-ASR audio/text plus speaker_id/category for shared sampling",
+  "qwen_prefix": "language English<asr_text>",
+  "source": {
+    "train": "C:\\MIRE team folder\\ASR-for-Accessibility\\data\\pd_prepared\\train.jsonl",
+    "val": "C:\\MIRE team folder\\ASR-for-Accessibility\\data\\pd_prepared\\val.jsonl"
+  },
+  "max_duration_seconds": 30.0,
+  "audio_root_override": "C:\\SAP_downsampled_database",
+  "audio_exists_checked": true,
+  "train_categories_allowed": [
+    "Digital Assistant Commands",
+    "Novel Sentences",
+    "Spontaneous Speech Prompts"
+  ],
+  "train": {
+    "source_recordings": 91035,
+    "source_speakers": 221,
+    "retained_recordings": 87875,
+    "retained_speakers": 221,
+    "source_categories": {
+      "Digital Assistant Commands": 61025,
+      "Non-spontaneous Speech Prompts": 89,
+      "Novel Sentences": 20243,
+      "Spontaneous Speech Prompts": 9678
+    },
+    "retained_categories": {
+      "Digital Assistant Commands": 60913,
+      "Novel Sentences": 20134,
+      "Spontaneous Speech Prompts": 6828
+    },
+    "excluded_by_category": {
+      "Non-spontaneous Speech Prompts": 89
+    },
+    "excluded_by_duration": {
+      "Digital Assistant Commands": 112,
+      "Novel Sentences": 109,
+      "Spontaneous Speech Prompts": 2850
+    }
+  },
+  "validation": {
+    "source_recordings": 10733,
+    "source_speakers": 25,
+    "retained_recordings": 10260,
+    "retained_speakers": 25,
+    "source_categories": {
+      "Digital Assistant Commands": 7174,
+      "Novel Sentences": 2393,
+      "Spontaneous Speech Prompts": 1166
+    },
+    "retained_categories": {
+      "Digital Assistant Commands": 7148,
+      "Novel Sentences": 2368,
+      "Spontaneous Speech Prompts": 744
+    },
+    "excluded_by_category": {},
+    "excluded_by_duration": {
+      "Digital Assistant Commands": 26,
+      "Novel Sentences": 25,
+      "Spontaneous Speech Prompts": 422
+    }
+  },
+  "pilot": {
+    "recordings": 8000,
+    "speakers": 221
+  },
+  "speaker_overlap": 0,
+  "audio_overlap": 0,
+  "seed": 42,
+  "privacy": "PRIVATE: manifest JSONLs include restricted source paths, transcripts, and speaker IDs"
+}

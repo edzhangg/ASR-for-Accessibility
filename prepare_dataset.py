@@ -4,7 +4,7 @@ r"""Prepare speaker-disjoint disease-specific ASR JSONL manifests from original 
 Read-only with respect to the SAP dataset. No audio is copied or changed.
 
 Usage (PowerShell):
-  py -u prepare_disease_dataset.py `
+  py -u prepare_dataset.py `
     --root "C:\SAP downsampled database" `
     --out ".\data\disease_prepared" `
     --seed 42
