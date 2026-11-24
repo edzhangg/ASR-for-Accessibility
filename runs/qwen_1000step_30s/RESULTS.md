@@ -9,15 +9,15 @@
 | E3_L1 · hard-speaker, decoder | 8.40% | 7.98% | 7.81% |
 | **E3_L2 · hard-speaker, encoder + decoder** | **8.35%** | **7.84%** | **7.54%** |
 
-### per category comparison
+### 1000steps per category comparison
 
 | Model | Overall WER | improvement | Commands WER | Novel sentences WER | Spontaneous speech WER |
 |---|---:|---:|---:|---:|---:|
 | Original Qwen (baseline) | 8.73% | — | 12.76% | 7.47% | 8.50% |
-| E4_L1 · Difficulty-weighted, decoder | 7.87% | 0.86 pp | 7.93% | 6.66% | **8.32%** |
-| E4_L2 · Difficulty-weighted, encoder + decoder | 7.75% | 0.98 pp | **6.33%** | 6.61% | 8.43% |
-| E3_L1 · Hard-speaker oversampling, decoder | 7.81% | 0.92 pp | 6.64% | 6.59% | 8.49% |
-| E3_L2 · Hard-speaker oversampling, encoder + decoder | **7.54%** | **1.18 pp** | 6.64% | **5.87%** | 8.34% |
+| E4_L1 · Difficulty-weighted, decoder | 7.87% | 0.86 | 7.93% | 6.66% | **8.32%** |
+| E4_L2 · Difficulty-weighted, encoder + decoder | 7.75% | 0.98 | **6.33%** | 6.61% | 8.43% |
+| E3_L1 · Hard-speaker oversampling, decoder | 7.81% | 0.92 | 6.64% | 6.59% | 8.49% |
+| E3_L2 · Hard-speaker oversampling, encoder + decoder | **7.54%** | **1.18** | 6.64% | **5.87%** | 8.34% |
 
 ### E3_L2 detailed
 
