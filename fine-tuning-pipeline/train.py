@@ -211,7 +211,12 @@ def main(argv: list[str] | None = None) -> None:
             "Use a NEW directory; overwrite/resume is intentionally unsupported."
         )
 
-    from sampling import build_sampler, load_speaker_wer_csv
+    from sampling import (
+        build_sampler,
+        load_speaker_wer_csv,
+        load_hard_labels_csv,
+        summarize_sampling,
+    )
     import torch
     from transformers import Trainer, TrainingArguments, set_seed
 
@@ -221,6 +226,7 @@ def main(argv: list[str] | None = None) -> None:
     train_rows = read_manifest(args.train_manifest)
     check_val_speaker_separation(train_rows, args.val_manifest)
     speaker_wer = load_speaker_wer_csv(args.speaker_wer_csv)
+    hard_labels = (load_hard_labels_csv(args.speaker_wer_csv) if args.sampling == "hard_threshold" else None)
     category_probs = parse_category_probs(args.category_probs)
     set_seed(args.seed)
     sampler = build_sampler(
@@ -228,7 +234,38 @@ def main(argv: list[str] | None = None) -> None:
         strategy=args.sampling, seed=args.seed,
         alpha=args.alpha, epsilon=args.epsilon, max_wer=args.max_wer,
         category_probs=category_probs, num_samples=len(train_rows),
+        hard_labels=hard_labels
     )
+
+    # Report expected sampling distribution
+    sampling_summary = summarize_sampling(
+        train_rows,
+        sampler.weights.tolist(),
+        hard_labels=hard_labels,
+    )
+
+    print("\n--- Sampling Diagnostics ---")
+    print(f"Strategy: {args.sampling}")
+    print(f"Recordings: {sampling_summary['num_recordings']}")
+    print(f"Speakers: {sampling_summary['num_speakers']}")
+
+    print("Expected category distribution:")
+    for category, probability in sampling_summary["category_probability"].items():
+        print(f"  {category}: {probability:.2%}")
+
+    if hard_labels is not None:
+        print(f"Overall hard probability: {sampling_summary['hard_probability']:.2%}")
+
+        print("Hard probability within each category:")
+        for category, probability in sampling_summary["hard_probability_by_category"].items():
+            print(f"  {category}: {probability:.2%}")
+
+    speaker_probs = sampling_summary["speaker_probability"].values()
+
+    print(f"Minimum speaker probability: {min(speaker_probs):.4%}")
+    print(f"Maximum speaker probability: {max(speaker_probs):.4%}")
+    print("----------------------------\n")
+
     # CRITICAL: ManifestDataset and sampler are built from THE SAME list of rows.
     dataset = ManifestDataset(train_rows)
 
